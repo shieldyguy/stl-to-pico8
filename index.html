@@ -1,283 +1,421 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PICO-8 3D Model Import Tool</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      margin: 20px;
-      background-color: #111;
-      color: #eee;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PICO-8 3D Model Import Tool</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+            background-color: #111;
+            color: #eee;
+        }
 
-    h1, h2 {
-      color: #ffcc00;
-    }
+        h1,
+        h2 {
+            color: #ffcc00;
+        }
 
-    section {
-      margin-bottom: 30px;
-    }
+        section {
+            margin-bottom: 30px;
+        }
 
-    #viewer-placeholder {
-      width: 256px;
-      height: 256px;
-      background: #222;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid #555;
-    }
+        #viewer-placeholder {
+            width: 256px;
+            height: 256px;
+            background: #222;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #555;
+        }
 
-    #grid-size-display {
-      margin-left: 10px;
-      font-weight: bold;
-    }
-  </style>
+        #grid-size-display {
+            margin-left: 10px;
+            font-weight: bold;
+        }
+    </style>
 </head>
+
 <body>
-  <h1>PICO-8 3D Model Import Tool</h1>
+    <h1>PICO-8 3D Model Import Tool</h1>
 
-  <section id="upload-section">
-    <h2>Upload Model</h2>
-    <input type="file" id="file-input" accept=".stl,.obj">
-    <div id="file-info"></div>
-  </section>
+    <section id="upload-section">
+        <h2>Upload Model</h2>
+        <input type="file" id="file-input" accept=".stl,.obj">
+        <div id="file-info"></div>
+    </section>
 
-  <section id="stats-section">
-    <h2>Model Stats</h2>
-    <p id="vertex-count">Vertices: 0</p>
-    <p id="face-count">Faces: 0</p>
-    <p id="pico-vertex-count">PICO Vertices: 0</p>
-    <p id="pico-face-count">PICO Faces: 0</p>
-    <p id="warnings"></p>
-  </section>
+    <section id="stats-section">
+        <h2>Model Stats</h2>
+        <p id="vertex-count">Vertices: 0</p>
+        <p id="face-count">Faces: 0</p>
+        <p id="pico-vertex-count">PICO Vertices: 0</p>
+        <p id="pico-face-count">PICO Faces: 0</p>
+        <p id="warnings"></p>
+    </section>
 
-  <section id="decimation-controls">
-    <h2>Decimation</h2>
-    <label for="grid-size-slider">Grid Size:</label>
-    <input type="range" id="grid-size-slider" min="0.01" max="1.0" step="0.01" value="0.1">
-    <span id="grid-size-display">0.10</span>
-    <button id="decimate-button">Decimate</button>
-  </section>
+    <section id="decimation-controls">
+        <h2>Decimation</h2>
+        <label for="grid-size-slider">Grid Size:</label>
+        <input type="range" id="grid-size-slider" min="0.01" max="1.0" step="0.01" value="0.1">
+        <span id="grid-size-display">0.10</span>
+        <button id="decimate-button">Decimate</button>
+    </section>
 
-  <section id="viewer-section">
-    <h2>Model Viewer</h2>
-    <div id="viewer-placeholder">(PICO-8 Viewer Coming Soon)</div>
-  </section>
+    <section id="viewer-section">
+        <h2>Model Viewer</h2>
+        <div id="pico8-container">
+            <!-- This will be replaced with the PICO-8 player when a model is loaded -->
+            <div id="viewer-placeholder">Load a model to view in PICO-8</div>
+        </div>
+        <div id="viewer-controls" style="margin-top: 10px; display: none;">
+            <label><input type="checkbox" id="toggle-wireframe" checked> Wireframe</label>
+            <label><input type="checkbox" id="toggle-fill" checked> Fill Faces</label>
+            <label>
+                Color:
+                <select id="model-color">
+                    <option value="7">White</option>
+                    <option value="8">Red</option>
+                    <option value="11">Blue</option>
+                    <option value="3">Green</option>
+                    <option value="10">Yellow</option>
+                    <option value="14">Pink</option>
+                </select>
+            </label>
+        </div>
+    </section>
 
-  <section id="lua-export">
-    <h2>Lua Export</h2>
-    <button id="export-lua-button">Export Lua</button>
-    <textarea id="lua-output" rows="10" style="width: 100%; margin-top: 10px;"></textarea>
-  </section>
+    <section id="lua-export">
+        <h2>Lua Export</h2>
+        <button id="export-lua-button">Export Lua</button>
+        <textarea id="lua-output" rows="10" style="width: 100%; margin-top: 10px;"></textarea>
+    </section>
 
-  <section id="controls-section">
-    <h2>Options</h2>
-    <label for="color-picker">Model Color:</label>
-    <input type="color" id="color-picker" value="#ffffff">
-  </section>
+    <section id="controls-section">
+        <h2>Options</h2>
+        <label for="color-picker">Model Color:</label>
+        <input type="color" id="color-picker" value="#ffffff">
+    </section>
 
-<script>
-const PICO_VERTEX_LIMIT = 256;
-const PICO_FACE_LIMIT = 512;
+    <script>
+        const PICO_VERTEX_LIMIT = 256;
+        const PICO_FACE_LIMIT = 512;
 
-// Grid size slider update
-document.getElementById('grid-size-slider').addEventListener('input', (event) => {
-  document.getElementById('grid-size-display').textContent = parseFloat(event.target.value).toFixed(2);
-});
+        // Grid size slider update
+        document.getElementById('grid-size-slider').addEventListener('input', (event) => {
+            document.getElementById('grid-size-display').textContent = parseFloat(event.target.value).toFixed(2);
+        });
 
-// Decimate button behavior
-document.getElementById('decimate-button').addEventListener('click', () => {
-  const gridSize = parseFloat(document.getElementById('grid-size-slider').value);
-  if (!window.dedupedModel) return;
-  const decimated = decimateModel(window.dedupedModel, gridSize);
-  displayPicoModelStats(decimated);
-  window.decimatedModel = decimated;
+        // Decimate button behavior
+        document.getElementById('decimate-button').addEventListener('click', () => {
+            const gridSize = parseFloat(document.getElementById('grid-size-slider').value);
+            if (!window.dedupedModel) return;
+            const decimated = decimateModel(window.dedupedModel, gridSize);
+            displayPicoModelStats(decimated);
+            window.decimatedModel = decimated;
 
-  // Re-run warning checks after decimation
-  const warnings = document.getElementById('warnings');
-  const warningMessages = [];
-  if (decimated.vertices.length > PICO_VERTEX_LIMIT) {
-    warningMessages.push(`❗ Too many vertices for PICO-8 (max ${PICO_VERTEX_LIMIT})`);
-  }
-  if (decimated.faces.length > PICO_FACE_LIMIT) {
-    warningMessages.push(`❗ Too many faces for PICO-8 (max ${PICO_FACE_LIMIT})`);
-  }
-  warnings.textContent = warningMessages.length > 0 ? warningMessages.join("\n") : "";
-});
+            // Re-run warning checks after decimation
+            const warnings = document.getElementById('warnings');
+            const warningMessages = [];
+            if (decimated.vertices.length > PICO_VERTEX_LIMIT) {
+                warningMessages.push(`❗ Too many vertices for PICO-8 (max ${PICO_VERTEX_LIMIT})`);
+            }
+            if (decimated.faces.length > PICO_FACE_LIMIT) {
+                warningMessages.push(`❗ Too many faces for PICO-8 (max ${PICO_FACE_LIMIT})`);
+            }
+            warnings.textContent = warningMessages.length > 0 ? warningMessages.join("\n") : "";
 
-// Export Lua button behavior
-document.getElementById('export-lua-button').addEventListener('click', () => {
-  exportToLua(window.decimatedModel);
-});
+            // Update: Send the decimated model to PICO-8
+            if (window.decimatedModel) {
+                sendModelToPico8(window.decimatedModel);
+            }
+        });
 
-// File input behavior
-document.getElementById('file-input').addEventListener('change', (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
+        // Export Lua button behavior
+        document.getElementById('export-lua-button').addEventListener('click', () => {
+            exportToLua(window.decimatedModel);
+        });
 
-  const fileInfo = document.getElementById('file-info');
-  fileInfo.textContent = `Loaded file: ${file.name} (${(file.size/1024).toFixed(2)} KB)`;
+        // File input behavior
+        document.getElementById('file-input').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
 
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const contents = e.target.result;
-    let format = detectFormat(file, contents);
+            const fileInfo = document.getElementById('file-info');
+            fileInfo.textContent = `Loaded file: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
 
-    const warnings = document.getElementById('warnings');
-    warnings.textContent = `Detected format: ${format}`;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const contents = e.target.result;
+                let format = detectFormat(file, contents);
 
-    if (format === 'stl-ascii') {
-      const rawModel = parseSTLAscii(contents);
-      displayModelStats(rawModel);
+                const warnings = document.getElementById('warnings');
+                warnings.textContent = `Detected format: ${format}`;
 
-      const dedupedModel = deduplicateVertices(rawModel);
-      window.dedupedModel = dedupedModel;
-      displayPicoModelStats(dedupedModel);
+                if (format === 'stl-ascii') {
+                    const rawModel = parseSTLAscii(contents);
+                    displayModelStats(rawModel);
 
-      const warningMessages = [];
-      if (dedupedModel.vertices.length > PICO_VERTEX_LIMIT) {
-        warningMessages.push(`❗ Too many vertices for PICO-8 (max ${PICO_VERTEX_LIMIT})`);
-      }
-      if (dedupedModel.faces.length > PICO_FACE_LIMIT) {
-        warningMessages.push(`❗ Too many faces for PICO-8 (max ${PICO_FACE_LIMIT})`);
-      }
-      if (warningMessages.length > 0) {
-        warnings.textContent += "\n" + warningMessages.join("\n");
-      }
+                    const dedupedModel = deduplicateVertices(rawModel);
+                    window.dedupedModel = dedupedModel;
+                    displayPicoModelStats(dedupedModel);
 
-    } else {
-      warnings.textContent += "\nCurrently only ASCII STL parsing is supported.";
-    }
-  };
+                    const warningMessages = [];
+                    if (dedupedModel.vertices.length > PICO_VERTEX_LIMIT) {
+                        warningMessages.push(`❗ Too many vertices for PICO-8 (max ${PICO_VERTEX_LIMIT})`);
+                    }
+                    if (dedupedModel.faces.length > PICO_FACE_LIMIT) {
+                        warningMessages.push(`❗ Too many faces for PICO-8 (max ${PICO_FACE_LIMIT})`);
+                    }
+                    if (warningMessages.length > 0) {
+                        warnings.textContent += "\n" + warningMessages.join("\n");
+                    }
 
-  reader.readAsText(file);
-});
+                    // Add: Send the deduped model to PICO-8
+                    if (window.dedupedModel) {
+                        sendModelToPico8(window.dedupedModel);
+                    }
 
-function detectFormat(file, contents) {
-  if (contents.startsWith('solid') || contents.includes('facet normal')) {
-    return 'stl-ascii';
-  } else if (file.name.endsWith('.stl')) {
-    return 'stl-binary';
-  } else if (file.name.endsWith('.obj')) {
-    return 'obj';
-  }
-  return 'unknown';
-}
+                } else {
+                    warnings.textContent += "\nCurrently only ASCII STL parsing is supported.";
+                }
+            };
 
-function parseSTLAscii(contents) {
-  const vertices = [];
-  const faces = [];
-  const lines = contents.split('\n');
-  let currentFace = [];
+            reader.readAsText(file);
+        });
 
-  for (let line of lines) {
-    line = line.trim();
-    if (line.startsWith('vertex')) {
-      const parts = line.split(/\s+/);
-      const v = {
-        x: parseFloat(parts[1]),
-        y: parseFloat(parts[2]),
-        z: parseFloat(parts[3])
-      };
-      vertices.push(v);
-      currentFace.push(vertices.length);
-      if (currentFace.length === 3) {
-        faces.push([...currentFace]);
-        currentFace = [];
-      }
-    }
-  }
-  return { vertices, faces };
-}
+        function detectFormat(file, contents) {
+            if (contents.startsWith('solid') || contents.includes('facet normal')) {
+                return 'stl-ascii';
+            } else if (file.name.endsWith('.stl')) {
+                return 'stl-binary';
+            } else if (file.name.endsWith('.obj')) {
+                return 'obj';
+            }
+            return 'unknown';
+        }
 
-function deduplicateVertices(model) {
-  const uniqueVerts = [];
-  const vertMap = new Map();
-  const newFaces = [];
+        function parseSTLAscii(contents) {
+            const vertices = [];
+            const faces = [];
+            const lines = contents.split('\n');
+            let currentFace = [];
 
-  model.faces.forEach(face => {
-    const newFace = face.map(index => {
-      const v = model.vertices[index - 1];
-      const key = `${v.x.toFixed(4)}_${v.y.toFixed(4)}_${v.z.toFixed(4)}`;
-      if (!vertMap.has(key)) {
-        vertMap.set(key, uniqueVerts.length + 1);
-        uniqueVerts.push(v);
-      }
-      return vertMap.get(key);
-    });
-    newFaces.push(newFace);
-  });
+            for (let line of lines) {
+                line = line.trim();
+                if (line.startsWith('vertex')) {
+                    const parts = line.split(/\s+/);
+                    const v = {
+                        x: parseFloat(parts[1]),
+                        y: parseFloat(parts[2]),
+                        z: parseFloat(parts[3])
+                    };
+                    vertices.push(v);
+                    currentFace.push(vertices.length);
+                    if (currentFace.length === 3) {
+                        faces.push([...currentFace]);
+                        currentFace = [];
+                    }
+                }
+            }
+            return { vertices, faces };
+        }
 
-  return { vertices: uniqueVerts, faces: newFaces };
-}
+        function deduplicateVertices(model) {
+            const uniqueVerts = [];
+            const vertMap = new Map();
+            const newFaces = [];
 
-function displayModelStats(model) {
-  document.getElementById('vertex-count').textContent = `Vertices: ${model.vertices.length}`;
-  document.getElementById('face-count').textContent = `Faces: ${model.faces.length}`;
-}
+            model.faces.forEach(face => {
+                const newFace = face.map(index => {
+                    const v = model.vertices[index - 1];
+                    const key = `${v.x.toFixed(4)}_${v.y.toFixed(4)}_${v.z.toFixed(4)}`;
+                    if (!vertMap.has(key)) {
+                        vertMap.set(key, uniqueVerts.length + 1);
+                        uniqueVerts.push(v);
+                    }
+                    return vertMap.get(key);
+                });
+                newFaces.push(newFace);
+            });
 
-function displayPicoModelStats(model) {
-  document.getElementById('pico-vertex-count').textContent = `PICO Vertices: ${model.vertices.length}`;
-  document.getElementById('pico-face-count').textContent = `PICO Faces: ${model.faces.length}`;
-}
+            return { vertices: uniqueVerts, faces: newFaces };
+        }
 
-function exportToLua(model) {
-  if (!model) return;
-  let lua = 'vertices={\n';
-  model.vertices.forEach(v => {
-    lua += `{x=${v.x.toFixed(2)},y=${v.y.toFixed(2)},z=${v.z.toFixed(2)}},\n`;
-  });
-  lua += '}\nfaces={\n';
-  model.faces.forEach(f => {
-    lua += `{${f[0]},${f[1]},${f[2]}},\n`;
-  });
-  lua += '}';
-  document.getElementById('lua-output').value = lua;
-}
+        function displayModelStats(model) {
+            document.getElementById('vertex-count').textContent = `Vertices: ${model.vertices.length}`;
+            document.getElementById('face-count').textContent = `Faces: ${model.faces.length}`;
+        }
 
-function decimateModel(model, gridSize = 0.1) {
-  const gridMap = new Map();
-  const simplifiedVerts = [];
-  const indexMap = new Map();
-  let currentIndex = 1;
+        function displayPicoModelStats(model) {
+            document.getElementById('pico-vertex-count').textContent = `PICO Vertices: ${model.vertices.length}`;
+            document.getElementById('pico-face-count').textContent = `PICO Faces: ${model.faces.length}`;
+        }
 
-  function quantize(v) {
-    return [
-      Math.round(v.x / gridSize),
-      Math.round(v.y / gridSize),
-      Math.round(v.z / gridSize)
-    ].join('_');
-  }
+        function exportToLua(model) {
+            if (!model) return;
+            let lua = 'vertices={\n';
+            model.vertices.forEach(v => {
+                lua += `{x=${v.x.toFixed(2)},y=${v.y.toFixed(2)},z=${v.z.toFixed(2)}},\n`;
+            });
+            lua += '}\nfaces={\n';
+            model.faces.forEach(f => {
+                lua += `{${f[0]},${f[1]},${f[2]}},\n`;
+            });
+            lua += '}';
+            document.getElementById('lua-output').value = lua;
+        }
 
-  const newFaces = [];
-  model.faces.forEach(face => {
-    const indices = face.map(index => {
-      const v = model.vertices[index - 1];
-      const key = quantize(v);
-      if (!gridMap.has(key)) {
-        gridMap.set(key, currentIndex);
-        indexMap.set(currentIndex, v);
-        currentIndex++;
-      }
-      return gridMap.get(key);
-    });
+        function decimateModel(model, gridSize = 0.1) {
+            const gridMap = new Map();
+            const simplifiedVerts = [];
+            const indexMap = new Map();
+            let currentIndex = 1;
 
-    const [a, b, c] = indices;
-    if (a !== b && b !== c && a !== c) {
-      newFaces.push(indices);
-    }
-  });
+            function quantize(v) {
+                return [
+                    Math.round(v.x / gridSize),
+                    Math.round(v.y / gridSize),
+                    Math.round(v.z / gridSize)
+                ].join('_');
+            }
 
-  gridMap.forEach((idx, key) => {
-    simplifiedVerts[idx - 1] = indexMap.get(idx);
-  });
+            const newFaces = [];
+            model.faces.forEach(face => {
+                const indices = face.map(index => {
+                    const v = model.vertices[index - 1];
+                    const key = quantize(v);
+                    if (!gridMap.has(key)) {
+                        gridMap.set(key, currentIndex);
+                        indexMap.set(currentIndex, v);
+                        currentIndex++;
+                    }
+                    return gridMap.get(key);
+                });
 
-  return { vertices: simplifiedVerts, faces: newFaces };
-}
-</script>
+                const [a, b, c] = indices;
+                if (a !== b && b !== c && a !== c) {
+                    newFaces.push(indices);
+                }
+            });
+
+            gridMap.forEach((idx, key) => {
+                simplifiedVerts[idx - 1] = indexMap.get(idx);
+            });
+
+            return { vertices: simplifiedVerts, faces: newFaces };
+        }
+
+        // New functions for PICO-8 integration
+
+        // Load the PICO-8 player
+        function loadPico8Viewer() {
+            const container = document.getElementById('pico8-container');
+            const placeholder = document.getElementById('viewer-placeholder');
+
+            if (placeholder) {
+                container.removeChild(placeholder);
+            }
+
+            // Check if the player is already loaded
+            if (document.getElementById('pico8_el')) {
+                return;
+            }
+
+            // Create the script element for loading PICO-8
+            const script = document.createElement('script');
+            script.src = './model_viewer.js'; // The exported PICO-8 JavaScript
+
+            // Create a div for the PICO-8 player
+            const pico8Div = document.createElement('div');
+            pico8Div.id = 'pico8_el';
+
+            container.appendChild(pico8Div);
+            document.body.appendChild(script);
+
+            // Show the viewer controls
+            document.getElementById('viewer-controls').style.display = 'block';
+
+            // Setup control listeners
+            setupViewerControls();
+        }
+
+        // Setup the viewer control elements
+        function setupViewerControls() {
+            // Wireframe toggle
+            document.getElementById('toggle-wireframe').addEventListener('change', function (e) {
+                sendPico8Command('wireframe', e.target.checked);
+            });
+
+            // Fill toggle
+            document.getElementById('toggle-fill').addEventListener('change', function (e) {
+                sendPico8Command('fill', e.target.checked);
+            });
+
+            // Color selector
+            document.getElementById('model-color').addEventListener('change', function (e) {
+                sendPico8Command('color', e.target.value);
+            });
+        }
+
+        // Send a model to the PICO-8 player
+        function sendModelToPico8(model) {
+            if (!model || !model.vertices || !model.faces) {
+                console.error('Invalid model data');
+                return;
+            }
+
+            // Ensure the PICO-8 player is loaded
+            loadPico8Viewer();
+
+            // Wait for the PICO-8 player to initialize
+            setTimeout(() => {
+                const pico8_elm = document.getElementById('pico8_el');
+                if (!pico8_elm || !pico8_elm.contentWindow) {
+                    console.error('PICO-8 player not found or initialized');
+                    return;
+                }
+
+                // Convert vertices to PICO-8 format (same format)
+                const picoVertices = model.vertices.map(v => {
+                    return { x: v.x, y: v.y, z: v.z };
+                });
+
+                // Convert faces (same format)
+                const picoFaces = model.faces.map(face => {
+                    return [face[0], face[1], face[2]];
+                });
+
+                // Send the data to PICO-8
+                pico8_elm.contentWindow.postMessage({
+                    type: 'model_data',
+                    vertices: picoVertices,
+                    faces: picoFaces
+                }, '*');
+
+                console.log(`Sent model to PICO-8: ${picoVertices.length} vertices, ${picoFaces.length} faces`);
+            }, 1000); // Give PICO-8 time to initialize
+        }
+
+        // Send a command to the PICO-8 player
+        function sendPico8Command(command, value) {
+            const pico8_elm = document.getElementById('pico8_el');
+            if (!pico8_elm || !pico8_elm.contentWindow) {
+                console.error('PICO-8 player not found or initialized');
+                return;
+            }
+
+            pico8_elm.contentWindow.postMessage({
+                type: 'command',
+                command: command,
+                value: value
+            }, '*');
+        }
+    </script>
 
 </body>
+
 </html>
