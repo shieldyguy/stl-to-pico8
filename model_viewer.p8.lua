@@ -4,6 +4,63 @@ __lua__
 -- stl to pico-8 model viewer debug version
 -- simplified for debugging
 
+-- message handling from web interface
+function handle_message(data)
+  if data.type == "model_data" then
+    -- Replace current_model with the received model
+    current_model = {
+      vertices = data.vertices,
+      faces = data.faces
+    }
+    
+    -- Center and scale the model appropriately
+    center_model()
+  elseif data.type == "command" then
+    if data.command == "wireframe" then
+      wireframe = data.value
+    elseif data.command == "fill" then
+      draw_filled = data.value
+    elseif data.command == "color" then
+      model_color = data.value
+    end
+  end
+end
+
+-- Center and scale model to fit view
+function center_model()
+  -- Calculate bounds
+  local min_x, max_x = 1000, -1000
+  local min_y, max_y = 1000, -1000
+  local min_z, max_z = 1000, -1000
+  
+  for i=1,#current_model.vertices do
+    local v = current_model.vertices[i]
+    min_x = min(min_x, v.x)
+    max_x = max(max_x, v.x)
+    min_y = min(min_y, v.y)
+    max_y = max(max_y, v.y)
+    min_z = min(min_z, v.z)
+    max_z = max(max_z, v.z)
+  end
+  
+  -- Calculate center and scale
+  local center_x = (min_x + max_x) / 2
+  local center_y = (min_y + max_y) / 2
+  local center_z = (min_z + max_z) / 2
+  
+  -- Scale factor (to fit in view)
+  local max_dim = max(max_x - min_x, max(max_y - min_y, max_z - min_z))
+  local scale = max_dim > 0 and 2 / max_dim or 1
+  
+  -- Apply centering
+  for i=1,#current_model.vertices do
+    local v = current_model.vertices[i]
+    v.x = (v.x - center_x) * scale
+    v.y = (v.y - center_y) * scale
+    v.z = (v.z - center_z) * scale
+  end
+end
+
 -- configuration
 local draw_filled = true
 local wireframe = true
