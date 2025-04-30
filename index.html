@@ -71,13 +71,23 @@
       <button id="decimate-button">Decimate</button>
     </section>
 
+    <button id="send-to-pico8-button" style="margin-top: 10px" disabled>
+      Send to PICO-8
+    </button>
+
     <section id="viewer-section">
       <h2>Model Viewer</h2>
       <div id="pico8-container">
-        <!-- This will be replaced with the PICO-8 player when a model is loaded -->
-        <div id="viewer-placeholder">Load a model to view in PICO-8</div>
+        <!-- Embed the PICO-8 player directly -->
+        <iframe
+          id="pico8_el"
+          width="256"
+          height="256"
+          src="./model_viewer.html"
+          style="border: none"
+        ></iframe>
       </div>
-      <div id="viewer-controls" style="margin-top: 10px; display: none">
+      <div id="viewer-controls" style="margin-top: 10px; display: block">
         <label
           ><input type="checkbox" id="toggle-wireframe" checked />
           Wireframe</label
@@ -109,12 +119,8 @@
       ></textarea>
     </section>
 
-    <section id="controls-section">
-      <h2>Options</h2>
-      <label for="color-picker">Model Color:</label>
-      <input type="color" id="color-picker" value="#ffffff" />
-    </section>
-
+    <!-- Include communic8 library -->
+    <script src="./node_modules/communic8/dist/communic8.js"></script>
     <script>
       const PICO_VERTEX_LIMIT = 256;
       const PICO_FACE_LIMIT = 512;
@@ -156,17 +162,23 @@
           warnings.textContent =
             warningMessages.length > 0 ? warningMessages.join("\n") : "";
 
-          // Update: Send the decimated model to PICO-8
-          if (window.decimatedModel) {
-            sendModelToPico8(window.decimatedModel);
-          }
+          // Enable the send button now that we have a processed model
+          document.getElementById("send-to-pico8-button").disabled = false;
+          window.decimatedModel = null; // Clear any previous decimated model
         });
 
       // Export Lua button behavior
       document
         .getElementById("export-lua-button")
         .addEventListener("click", () => {
-          exportToLua(window.decimatedModel);
+          const modelToExport = window.decimatedModel || window.dedupedModel;
+          if (modelToExport) {
+            exportToLua(modelToExport);
+          } else {
+            console.error("No model available to export.");
+            document.getElementById("lua-output").value =
+              "-- No model loaded --";
+          }
         });
 
       // File input behavior
@@ -212,10 +224,14 @@
                 warnings.textContent += "\n" + warningMessages.join("\n");
               }
 
+              // Enable the send button now that we have a processed model
+              document.getElementById("send-to-pico8-button").disabled = false;
+              window.decimatedModel = null; // Clear any previous decimated model
+
               // Add: Send the deduped model to PICO-8
-              if (window.dedupedModel) {
-                sendModelToPico8(window.dedupedModel);
-              }
+              // if (window.dedupedModel) {
+              //  sendModelToPico8(window.dedupedModel);
+              // }
             } else {
               warnings.textContent +=
                 "\nCurrently only ASCII STL parsing is supported.";
@@ -357,126 +373,115 @@
         return { vertices: simplifiedVerts, faces: newFaces };
       }
 
-      // New functions for PICO-8 integration
+      // --- communic8 Integration ---
+      const { connect, RPC, ArgTypes } = Communic8;
 
-      // Load the PICO-8 player
-      function loadPico8Viewer() {
-        const container = document.getElementById("pico8-container");
-        const placeholder = document.getElementById("viewer-placeholder");
+      // Define RPCs (must match Lua side)
+      const receiveModelRpc = RPC({
+        id: 0,
+        input: [
+          ArgTypes.Array(
+            ArgTypes.Tuple(ArgTypes.Number, ArgTypes.Number, ArgTypes.Number)
+          ), // vertices
+          ArgTypes.Array(
+            ArgTypes.Tuple(ArgTypes.Number, ArgTypes.Number, ArgTypes.Number)
+          ), // faces
+        ],
+        output: [],
+      });
 
-        if (placeholder) {
-          container.removeChild(placeholder);
-        }
+      const setWireframeRpc = RPC({
+        id: 1,
+        input: [ArgTypes.Boolean],
+        output: [],
+      });
 
-        // Check if the player is already loaded
-        if (document.getElementById("pico8_el")) {
-          return;
-        }
+      const setFillRpc = RPC({
+        id: 2,
+        input: [ArgTypes.Boolean],
+        output: [],
+      });
 
-        // Create an iframe for the PICO-8 player
-        const pico8Iframe = document.createElement("iframe");
-        pico8Iframe.id = "pico8_el";
-        pico8Iframe.width = "256";
-        pico8Iframe.height = "256";
-        pico8Iframe.src = "./model_viewer.html"; // The exported PICO-8 HTML
+      const setColorRpc = RPC({
+        id: 3,
+        input: [ArgTypes.Byte],
+        output: [],
+      });
 
-        container.appendChild(pico8Iframe);
+      // Connect to PICO-8 (this starts polling GPIO)
+      // Ensure the PICO-8 player (model_viewer.html) is running for this to connect
+      const bridge = connect();
 
-        // Show the viewer controls
-        document.getElementById("viewer-controls").style.display = "block";
-
-        // Setup control listeners
-        setupViewerControls();
-      }
-
-      // Setup the viewer control elements
-      function setupViewerControls() {
-        // Wireframe toggle
-        document
-          .getElementById("toggle-wireframe")
-          .addEventListener("change", function (e) {
-            sendPico8Command("wireframe", e.target.checked);
-          });
-
-        // Fill toggle
-        document
-          .getElementById("toggle-fill")
-          .addEventListener("change", function (e) {
-            sendPico8Command("fill", e.target.checked);
-          });
-
-        // Color selector
-        document
-          .getElementById("model-color")
-          .addEventListener("change", function (e) {
-            sendPico8Command("color", e.target.value);
-          });
-      }
-
-      // Send a model to the PICO-8 player
-      function sendModelToPico8(model) {
-        if (!model || !model.vertices || !model.faces) {
-          console.error("Invalid model data");
-          return;
-        }
-
-        // Ensure the PICO-8 player is loaded
-        loadPico8Viewer();
-
-        // Wait for the PICO-8 player to initialize
-        setTimeout(() => {
-          const pico8_elm = document.getElementById("pico8_el");
-          if (!pico8_elm || !pico8_elm.contentWindow) {
-            console.error("PICO-8 player not found or initialized");
+      // Rewire UI controls to use RPC
+      document
+        .getElementById("send-to-pico8-button")
+        .addEventListener("click", () => {
+          const model = window.decimatedModel || window.dedupedModel;
+          if (!model) {
+            console.error("No model data available to send.");
             return;
           }
 
-          // Convert vertices to PICO-8 format (same format)
-          const picoVertices = model.vertices.map((v) => {
-            return { x: v.x, y: v.y, z: v.z };
-          });
-
-          // Convert faces (same format)
-          const picoFaces = model.faces.map((face) => {
-            return [face[0], face[1], face[2]];
-          });
-
-          // Send the data to PICO-8
-          pico8_elm.contentWindow.postMessage(
-            {
-              type: "model_data",
-              vertices: picoVertices,
-              faces: picoFaces,
-            },
-            "*"
-          );
+          // Format data for RPC
+          const verticesRpc = model.vertices.map((v) => [v.x, v.y, v.z]);
+          const facesRpc = model.faces.map((f) => [f[0], f[1], f[2]]);
 
           console.log(
-            `Sent model to PICO-8: ${picoVertices.length} vertices, ${picoFaces.length} faces`
+            `Sending model via communic8: ${verticesRpc.length} verts, ${facesRpc.length} faces`
           );
-        }, 1000); // Give PICO-8 time to initialize
-      }
 
-      // Send a command to the PICO-8 player
-      function sendPico8Command(command, value) {
-        const pico8_elm = document.getElementById("pico8_el");
-        if (!pico8_elm || !pico8_elm.contentWindow) {
-          console.error("PICO-8 player not found or initialized");
-          return;
-        }
+          // Create the RPC call - no need for array wrapper here since receiveModelRpc expects two args
+          const rpcCall = receiveModelRpc(verticesRpc, facesRpc);
 
-        pico8_elm.contentWindow.postMessage(
-          {
-            type: "command",
-            command: command,
-            value: value,
-          },
-          "*"
-        );
-      }
+          bridge
+            .send(rpcCall)
+            .then(() => console.log("Model data sent successfully."))
+            .catch((err) => console.error("Error sending model data:", err));
+        });
 
-      // Add this line to load the viewer on page load
-      loadPico8Viewer();
+      document
+        .getElementById("toggle-wireframe")
+        .addEventListener("change", function (e) {
+          const isChecked = e.target.checked;
+          console.log("Sending wireframe value:", typeof isChecked, isChecked); // Debug log
+
+          // Create the RPC call directly with the value
+          const rpcCall = setWireframeRpc(e.target.checked);
+
+          bridge
+            .send(rpcCall)
+            .catch((err) => console.error("Error setting wireframe:", err));
+        });
+
+      document
+        .getElementById("toggle-fill")
+        .addEventListener("change", function (e) {
+          const isChecked = e.target.checked;
+          console.log("Sending fill value:", typeof isChecked, isChecked); // Debug log
+
+          // Create the RPC call directly with the value
+          const rpcCall = setFillRpc(e.target.checked);
+
+          bridge
+            .send(rpcCall)
+            .catch((err) => console.error("Error setting fill:", err));
+        });
+
+      document
+        .getElementById("model-color")
+        .addEventListener("change", function (e) {
+          const colorByte = parseInt(e.target.value, 10);
+          console.log("Sending color value:", typeof colorByte, colorByte); // Debug log
+
+          // Create the RPC call directly with the value
+          const rpcCall = setColorRpc(colorByte);
+
+          bridge
+            .send(rpcCall)
+            .catch((err) => console.error("Error setting color:", err));
+        });
+
+      // --- End communic8 Integration ---
     </script>
   </body>
 </html>

@@ -139,6 +139,52 @@ end
 print("🅾️ toggle wireframe: "..(wireframe and "on" or "off"), 2, 107, 6)
 ```
 
+## Integrate `communic8` Library for JavaScript <-> PICO-8 Communication
+
+**Goal:** Replace the unreliable `postMessage` and `js_eval` bridge with the `communic8` library, using the GPIO pins for robust communication.
+
+**Status:**
+
+- ✅ Plan defined
+- ✅ Include `communic8` Libraries (JS side)
+- ✅ Define RPCs (JS & Lua)
+- ✅ Implement JS Side (`index.html`)
+- ✅ Implement Lua Side (`model_viewer.p8.lua`)
+- ⏳ Clean up `model_viewer.js`
+
+**Plan:**
+
+1.  **Include `communic8` Libraries:**
+
+    - Add `<script src="./node_modules/communic8/dist/communic8.js"></script>` to `index.html`. (Path assumes direct serving from node_modules, adjust if using a bundler).
+    - Add `communic8` Lua code (`arg_types`, `init_communic8`, etc.) to `model_viewer.p8.lua`.
+
+2.  **Define RPCs (JS & Lua):**
+
+    - `receive_model` (ID 0): Input `Array(Tuple(Number, Number, Number))` for vertices, `Array(Tuple(Number, Number, Number))` for faces. Output: None.
+    - `set_wireframe` (ID 1): Input `Boolean`. Output: None.
+    - `set_fill` (ID 2): Input `Boolean`. Output: None.
+    - `set_color` (ID 3): Input `Byte`. Output: None.
+
+3.  **Implement JS Side (`index.html`):**
+
+    - Remove old `postMessage` logic (`sendModelToPico8`, `sendPico8Command`).
+    - Remove old `setupViewerControls`.
+    - Remove iframe loading logic (`loadPico8Viewer`) as it's tied to the old method.
+    - Initialize `communic8` bridge using `connect()`.
+    - Update UI event handlers (checkboxes, color select, send button) to format data and call the corresponding RPCs using `bridge.send()`.
+
+4.  **Implement Lua Side (`model_viewer.p8.lua`):**
+
+    - Remove old `handle_message` function.
+    - Add the `communic8` Lua library code.
+    - Add the `functions` table defining RPC implementations for receiving model data and handling control changes.
+    - Initialize `communic8` in `_init` using `init_communic8(functions)`.
+    - Call the returned `update_communic8()` function in `_update()`.
+
+5.  **Clean up `model_viewer.js`:**
+    - Instruct user to remove the manually added `window.addEventListener("message", ...)` and `Module.pico8HandleMessage` function from `model_viewer.js`.
+
 ## Testing
 
 After implementing these changes:
