@@ -1,331 +1,334 @@
 pico-8 cartridge // http://www.pico-8.com
 version 36
 __lua__
--- stl to pico-8 model viewer
--- by cmcdowell
+-- stl to pico-8 model viewer debug version
+-- simplified for debugging
 
 -- configuration
-local rot_speed = 0.01
-local wireframe = true
 local draw_filled = true
+local wireframe = true
 local model_color = 7 -- white
-local light_dir = {x=0, y=1, z=2}
-local scale = 1.0
 
--- model data (will be populated)
-vertices = {}
-faces = {}
+-- lighting configuration
+local light_dir = {x=0.5, y=-0.7, z=0.5} -- Diagonal light from upper right
+local light_intensity = 0.8 -- Base light intensity (0-1)
+local ambient_light = 0.2 -- Ambient light level (0-1)
 
--- camera/view settings
-local cam = {
-  pos = {x=0, y=0, z=-10},
-  fov = 0.8,
-  aspect = 1.0,
-  near = 0.1,
-  far = 1000
+-- simple cube model
+local cube = {
+  -- vertices
+  vertices = {
+    {x=-1, y=-1, z=-1}, -- 1: front bottom left
+    {x= 1, y=-1, z=-1}, -- 2: front bottom right
+    {x= 1, y= 1, z=-1}, -- 3: front top right
+    {x=-1, y= 1, z=-1}, -- 4: front top left
+    {x=-1, y=-1, z= 1}, -- 5: back bottom left
+    {x= 1, y=-1, z= 1}, -- 6: back bottom right
+    {x= 1, y= 1, z= 1}, -- 7: back top right
+    {x=-1, y= 1, z= 1}  -- 8: back top left
+  },
+  
+  -- faces (triangles)
+  faces = {
+    {3, 2, 1}, {4, 3, 1}, -- front (z = -1)
+    {8, 5, 6}, {7, 8, 6}, -- back (z = 1)
+    {2, 6, 5}, {1, 2, 5}, -- bottom (y = -1)
+    {8, 7, 3}, {4, 8, 3}, -- top (y = 1)
+    {4, 1, 5}, {8, 4, 5}, -- left (x = -1)
+    {7, 6, 2}, {3, 7, 2}  -- right (x = 1)
+  }
+  
+}
+
+-- current model to display
+local current_model = cube
+
+-- camera settings
+local camera = {
+  x = 0,
+  y = 0,
+  z = 0   -- camera at origin
 }
 
 -- model transform
 local model = {
-  pos = {x=0, y=0, z=0},
-  rot = {x=0, y=0, z=0},
-  scale = 1
+  x = 0,
+  y = 0,
+  z = 5,  -- model 5 units in front of camera
+  rot_y = 0
 }
 
 -- initialization
 function _init()
-  -- normalize light direction
+  cls(0)
+  print("debug test", 2, 2, 7)
+  
+  -- Normalize light direction at start
   local len = sqrt(light_dir.x^2 + light_dir.y^2 + light_dir.z^2)
-  light_dir.x /= len
-  light_dir.y /= len
-  light_dir.z /= len
-  
-  -- load test cube if no model is provided
-  if #vertices == 0 then
-    load_cube()
+  if len > 0 then
+    light_dir.x /= len
+    light_dir.y /= len
+    light_dir.z /= len
   end
-  
-  -- center and scale model
-  center_model()
 end
 
--- create a simple cube model for testing
-function load_cube()
-  vertices = {
-    {x=-1, y=-1, z=-1},
-    {x= 1, y=-1, z=-1},
-    {x= 1, y= 1, z=-1},
-    {x=-1, y= 1, z=-1},
-    {x=-1, y=-1, z= 1},
-    {x= 1, y=-1, z= 1},
-    {x= 1, y= 1, z= 1},
-    {x=-1, y= 1, z= 1}
-  }
-  
-  faces = {
-    {1, 2, 3}, {1, 3, 4}, -- front
-    {5, 6, 7}, {5, 7, 8}, -- back
-    {1, 2, 6}, {1, 6, 5}, -- bottom
-    {3, 4, 8}, {3, 8, 7}, -- top
-    {1, 4, 8}, {1, 8, 5}, -- left
-    {2, 3, 7}, {2, 7, 6}  -- right
-  }
-end
-
--- center model and scale to fit screen
-function center_model()
-  -- find center and bounds
-  local min_x, max_x = 32000, -32000
-  local min_y, max_y = 32000, -32000
-  local min_z, max_z = 32000, -32000
-  
-  for i=1,#vertices do
-    local v = vertices[i]
-    min_x = min(min_x, v.x)
-    max_x = max(max_x, v.x)
-    min_y = min(min_y, v.y)
-    max_y = max(max_y, v.y)
-    min_z = min(min_z, v.z)
-    max_z = max(max_z, v.z)
-  end
-  
-  -- compute center
-  local center_x = (min_x + max_x) / 2
-  local center_y = (min_y + max_y) / 2
-  local center_z = (min_z + max_z) / 2
-  
-  -- calculate scale factor to fit screen
-  local size_x = max_x - min_x
-  local size_y = max_y - min_y
-  local size_z = max_z - min_z
-  local max_size = max(size_x, max(size_y, size_z))
-  scale = 4 / max_size
-  
-  -- apply centering offset to model position
-  model.pos.x = -center_x
-  model.pos.y = -center_y
-  model.pos.z = -center_z
-end
-
--- update model rotation
+-- update rotation
 function _update()
-  model.rot.y += rot_speed
+  if btn(0) then model.rot_y -= 0.01 end
+  if btn(1) then model.rot_y += 0.01 end
   
-  -- handle input
-  if btn(0) then model.rot.y -= 0.02 end
-  if btn(1) then model.rot.y += 0.02 end
-  if btn(2) then model.rot.x -= 0.02 end
-  if btn(3) then model.rot.x += 0.02 end
+  -- Light direction controls
+  if btn(2) then light_dir.y -= 0.01 end -- Up
+  if btn(3) then light_dir.y += 0.01 end -- Down
   
-  -- toggle wireframe/fill with z/x
-  if btnp(4) then wireframe = not wireframe end
-  if btnp(5) then draw_filled = not draw_filled end
+  -- X and O buttons for light X direction and wireframe toggle
+  if btn(4) then light_dir.x -= 0.01 end      -- Left (using O)
+  if btn(5) then light_dir.x += 0.01 end      -- Right (using X)
+  if btnp(4) then wireframe = not wireframe end  -- Toggle wireframe (O)
+  
+  -- Normalize light direction after changes
+  local len = sqrt(light_dir.x^2 + light_dir.y^2 + light_dir.z^2)
+  if len > 0 then
+    light_dir.x /= len
+    light_dir.y /= len
+    light_dir.z /= len
+  end
 end
 
--- draw the model
+-- draw test triangle
 function _draw()
   cls(0)
   
-  -- draw model
-  local sorted_faces = sort_faces()
+  print("cube test", 2, 2, 7)
+  print("rot_y: "..model.rot_y, 2, 9, 11)
+  print("verts: "..#current_model.vertices, 2, 16, 11)
+  print("faces: "..#current_model.faces, 2, 23, 11)
   
-  for i=1,#sorted_faces do
-    local face = sorted_faces[i]
-    draw_face(face)
-  end
+  -- Show light direction
+  local lx, ly, lz = light_dir.x, light_dir.y, light_dir.z
+  print("light: "..flr(lx*100)/100 ..","..flr(ly*100)/100, 2, 30, 11)
   
-  -- draw UI
-  print("stl viewer", 2, 2, 7)
-  print("⬅️➡️ rotate y", 2, 120, 6)
-  print("⬆️⬇️ rotate x", 64, 120, 6)
+  -- draw all faces of the model
+  draw_model(current_model)
   
-  -- debug info
-  print("verts: "..#vertices, 2, 8, 11)
-  print("faces: "..#faces, 2, 14, 11)
+  print("⬅️➡️ rotate", 2, 107, 6)
+  print("⬆️⬇️ move light", 2, 114, 6)
+  print("🅾️ wireframe: "..(wireframe and "on" or "off"), 2, 121, 6)
 end
 
--- sort faces by z depth
-function sort_faces()
-  local sorted = {}
+-- transform a single vertex
+function transform_vertex(vtx)
+  -- step 1: apply rotation around y axis
+  local sin_y = sin(model.rot_y)
+  local cos_y = cos(model.rot_y)
   
-  -- create table with face index and z depth
-  for i=1,#faces do
-    local face = faces[i]
-    local v1 = vertices[face[1]]
-    local v2 = vertices[face[2]]
-    local v3 = vertices[face[3]]
-    
-    -- average z depth of face after rotation
-    local z_depth = (
-      transform_vertex(v1).z +
-      transform_vertex(v2).z +
-      transform_vertex(v3).z
-    ) / 3
-    
-    add(sorted, {index=i, z=z_depth})
+  local x1 = vtx.x * cos_y - vtx.z * sin_y
+  local z1 = vtx.x * sin_y + vtx.z * cos_y
+  
+  -- step 2: apply translation (model position)
+  local x2 = x1 + model.x 
+  local y2 = vtx.y + model.y
+  local z2 = z1 + model.z
+  
+  -- step 3: convert to camera space
+  local x3 = x2 - camera.x
+  local y3 = y2 - camera.y
+  local z3 = z2 - camera.z
+  
+  return {x = x3, y = y3, z = z3}
+end
+
+-- project transformed vertex to screen
+function project_vertex(vtx_transformed)
+  -- explicit named variables for clarity
+  local x = vtx_transformed.x
+  local y = vtx_transformed.y 
+  local z = vtx_transformed.z
+  
+  -- ensure z is positive - vital for projection
+  if z <= 0.1 then
+    z = 0.1
   end
   
-  -- sort back to front
-  for i=1,#sorted do
-    for j=1,#sorted-1 do
-      if sorted[j].z < sorted[j+1].z then
-        sorted[j], sorted[j+1] = sorted[j+1], sorted[j]
+  -- increased projection scale to 60 for better visibility
+  local scale = 60
+  local screen_x = 64 + (x / z) * scale
+  local screen_y = 64 + (y / z) * scale
+  
+  return {
+    screen_x = screen_x,
+    screen_y = screen_y,
+    z = z
+  }
+end
+
+-- draw an entire model
+function draw_model(model)
+  -- calculate average z-depth for each face and store in a table
+  local faces_to_draw = {}
+  
+  for i=1,#model.faces do
+    local face = model.faces[i]
+    
+    -- get vertices
+    local v1 = model.vertices[face[1]]
+    local v2 = model.vertices[face[2]]
+    local v3 = model.vertices[face[3]]
+    
+    -- transform vertices
+    local t1 = transform_vertex(v1)
+    local t2 = transform_vertex(v2)
+    local t3 = transform_vertex(v3)
+    
+    -- calculate average z-depth
+    local z_depth = (t1.z + t2.z + t3.z) / 3
+    
+    -- calculate face normal using cross product
+    -- vector 1: t2-t1
+    local v1x, v1y, v1z = t2.x-t1.x, t2.y-t1.y, t2.z-t1.z
+    -- vector 2: t3-t1
+    local v2x, v2y, v2z = t3.x-t1.x, t3.y-t1.y, t3.z-t1.z
+    -- cross product to get normal
+    local nx = v1y*v2z - v1z*v2y
+    local ny = v1z*v2x - v1x*v2z
+    local nz = v1x*v2y - v1y*v2x
+    
+    -- dot product with view direction (for camera at origin looking along z)
+    -- view direction is from face center to camera
+    local view_x, view_y, view_z = -((t1.x+t2.x+t3.x)/3), -((t1.y+t2.y+t3.y)/3), -((t1.z+t2.z+t3.z)/3)
+    local dot = nx*view_x + ny*view_y + nz*view_z
+    
+    -- only add faces facing camera (dot product > 0)
+    if dot > 0 then
+      add(faces_to_draw, {
+        index = i,
+        z = z_depth,
+        v1 = v1,
+        v2 = v2,
+        v3 = v3
+      })
+    end
+  end
+  
+  -- sort faces by z-depth (back to front)
+  for i=1,#faces_to_draw do
+    for j=1,#faces_to_draw-1 do
+      if faces_to_draw[j].z < faces_to_draw[j+1].z then
+        faces_to_draw[j], faces_to_draw[j+1] = faces_to_draw[j+1], faces_to_draw[j]
       end
     end
   end
   
-  -- convert to just face indices
-  local result = {}
-  for i=1,#sorted do
-    add(result, faces[sorted[i].index])
+  -- draw faces in sorted order
+  for i=1,#faces_to_draw do
+    local face_data = faces_to_draw[i]
+    draw_face_with_vertices(face_data.v1, face_data.v2, face_data.v3)
   end
-  
-  return result
 end
 
--- transform a vertex through model matrix
-function transform_vertex(v)
-  -- translate to center
-  local x = v.x + model.pos.x
-  local y = v.y + model.pos.y
-  local z = v.z + model.pos.z
-  
-  -- apply scale
-  x *= scale
-  y *= scale
-  z *= scale
-  
-  -- simple y-axis rotation for now
-  local sin_y = sin(model.rot.y)
-  local cos_y = cos(model.rot.y)
-  local sin_x = sin(model.rot.x)
-  local cos_x = cos(model.rot.x)
-  
-  -- rotate around y
-  local nx = x * cos_y - z * sin_y
-  local nz = x * sin_y + z * cos_y
-  
-  -- rotate around x
-  local ny = y * cos_x - nz * sin_x
-  nz = y * sin_x + nz * cos_x
-  
-  return {x=nx, y=ny, z=nz + cam.pos.z}
-end
-
--- project a 3D point to 2D screen space
-function project_vertex(v)
-  local transformed = transform_vertex(v)
-  
-  -- perspective projection
-  local z = transformed.z
-  if z < 0.1 then z = 0.1 end
-  
-  local px = transformed.x / z * cam.fov * 64 + 64
-  local py = transformed.y / z * cam.fov * 64 + 64
-  
-  return {x=px, y=py, z=z}
-end
-
--- calculate face normal
-function face_normal(v1, v2, v3)
-  -- vectors for two edges
-  local ax = v2.x - v1.x
-  local ay = v2.y - v1.y
-  local az = v2.z - v1.z
-  
-  local bx = v3.x - v1.x
-  local by = v3.y - v1.y
-  local bz = v3.z - v1.z
-  
-  -- cross product
-  local nx = ay * bz - az * by
-  local ny = az * bx - ax * bz
-  local nz = ax * by - ay * bx
-  
-  -- normalize
-  local len = sqrt(nx*nx + ny*ny + nz*nz)
-  if len > 0 then
-    nx /= len
-    ny /= len
-    nz /= len
-  end
-  
-  return {x=nx, y=ny, z=nz}
-end
-
--- calculate face lighting
-function calculate_lighting(normal)
-  -- dot product with light direction
-  local dot = normal.x * light_dir.x + 
-              normal.y * light_dir.y + 
-              normal.z * light_dir.z
-  
-  -- clamp to positive values only (back face is dark)
-  if dot < 0 then dot = 0 end
-  
-  -- scale to pico-8 colors (dark to light)
-  local col = flr(dot * 5) + model_color
-  if col > 15 then col = 15 end
-  
-  return col
-end
-
--- draw a single face
-function draw_face(face)
-  local v1 = vertices[face[1]]
-  local v2 = vertices[face[2]]
-  local v3 = vertices[face[3]]
-  
-  -- transform to world space to calculate normal
+-- draw a face using the provided vertices directly
+function draw_face_with_vertices(v1, v2, v3)
+  -- 1. Transform each vertex
   local t1 = transform_vertex(v1)
   local t2 = transform_vertex(v2)
   local t3 = transform_vertex(v3)
   
-  -- calculate normal
-  local normal = face_normal(t1, t2, t3)
+  -- 2. Project each vertex
+  local p1 = project_vertex(t1)
+  local p2 = project_vertex(t2)
+  local p3 = project_vertex(t3)
   
-  -- simple backface culling
-  if normal.z < 0 then
-    -- project each vertex
-    local p1 = project_vertex(v1)
-    local p2 = project_vertex(v2)
-    local p3 = project_vertex(v3)
+  -- Check if triangle is on screen
+  local on_screen = 
+    is_point_on_screen(p1) or
+    is_point_on_screen(p2) or
+    is_point_on_screen(p3)
+  
+  if on_screen then
+    -- Calculate face normal for lighting
+    -- vector 1: t2-t1
+    local v1x, v1y, v1z = t2.x-t1.x, t2.y-t1.y, t2.z-t1.z
+    -- vector 2: t3-t1
+    local v2x, v2y, v2z = t3.x-t1.x, t3.y-t1.y, t3.z-t1.z
+    -- cross product to get normal
+    local nx = v1y*v2z - v1z*v2y
+    local ny = v1z*v2x - v1x*v2z
+    local nz = v1x*v2y - v1y*v2x
     
-    -- check if any part is on screen
-    if is_visible(p1, p2, p3) then
-      -- calculate light color
-      local col = calculate_lighting(normal)
-      
-      -- draw filled triangle
-      if draw_filled then
-        filled_triangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, col)
-      end
-      
-      -- draw wireframe
-      if wireframe then
-        line(p1.x, p1.y, p2.x, p2.y, 1)
-        line(p2.x, p2.y, p3.x, p3.y, 1)
-        line(p3.x, p3.y, p1.x, p1.y, 1)
-      end
+    -- Calculate lighting from normal and light direction
+    local light_dot = nx*light_dir.x + ny*light_dir.y + nz*light_dir.z
+    
+    -- Normalize the dot product to 0-1 range
+    light_dot = max(light_dot, 0)
+    
+    -- Calculate final light level
+    local light_level = ambient_light + light_intensity * light_dot
+    
+    -- Get shaded color
+    local shaded_color = shade_color(model_color, light_level)
+    
+    -- Draw filled
+    if draw_filled then
+      tri(
+        p1.screen_x, p1.screen_y,
+        p2.screen_x, p2.screen_y,
+        p3.screen_x, p3.screen_y,
+        shaded_color
+      )
+    end
+    
+    -- Draw wireframe
+    if wireframe then
+      line(p1.screen_x, p1.screen_y, p2.screen_x, p2.screen_y, 1)
+      line(p2.screen_x, p2.screen_y, p3.screen_x, p3.screen_y, 1)
+      line(p3.screen_x, p3.screen_y, p1.screen_x, p1.screen_y, 1)
     end
   end
 end
 
--- check if triangle is visible on screen
-function is_visible(p1, p2, p3)
-  -- check if any vertex is on screen
-  local function on_screen(p)
-    return p.x >= -20 and p.x <= 148 and
-           p.y >= -20 and p.y <= 148
+-- shade color based on light level
+function shade_color(base_color, light_level)
+  -- Color ramps for different base colors
+  local color_ramps = {
+    {1,1,12,7,7,7},    -- Default white (7)
+    {1,1,9,8,8,8},     -- Red (8)
+    {1,1,4,11,11,11},  -- Blue (11)
+    {1,1,3,3,11,11},   -- Green (3)
+    {1,1,4,9,10,10},   -- Yellow (10)
+    {1,1,2,14,14,14}   -- Pink (14)
+  }
+  
+  -- Select ramp based on base_color
+  local ramp_index = 1  -- Default to first ramp
+  if base_color == 8 then ramp_index = 2      -- Red
+  elseif base_color == 11 then ramp_index = 3 -- Blue
+  elseif base_color == 3 then ramp_index = 4  -- Green
+  elseif base_color == 10 then ramp_index = 5 -- Yellow
+  elseif base_color == 14 then ramp_index = 6 -- Pink
   end
   
-  return on_screen(p1) or on_screen(p2) or on_screen(p3)
+  -- Get the appropriate color ramp
+  local ramp = color_ramps[ramp_index]
+  
+  -- Clamp light level between 0-1
+  light_level = max(0, min(1, light_level))
+  
+  -- Map to ramp index (1-6)
+  local shade_index = flr(light_level * (#ramp-1)) + 1
+  
+  -- Return the shaded color
+  return ramp[shade_index]
 end
 
--- draw a filled triangle
-function filled_triangle(x1, y1, x2, y2, x3, y3, col)
-  -- simple triangle fill algorithm
-  -- sort vertices by y
+-- check if point is on screen
+function is_point_on_screen(p)
+  return p.screen_x >= -20 and p.screen_x <= 148 and
+         p.screen_y >= -20 and p.screen_y <= 148
+end
+
+-- simple filled triangle 
+function tri(x1, y1, x2, y2, x3, y3, col)
+  -- sort points by y coordinate
   if y1 > y2 then
     x1, x2 = x2, x1
     y1, y2 = y2, y1
@@ -339,75 +342,44 @@ function filled_triangle(x1, y1, x2, y2, x3, y3, col)
     y1, y2 = y2, y1
   end
   
-  -- early bail if off-screen
-  if y3 < 0 or y1 > 127 then return end
-  
-  -- clip y values
-  y1 = max(0, min(127, y1))
-  y2 = max(0, min(127, y2))
-  y3 = max(0, min(127, y3))
-  
   -- calculate slopes
-  local dx12 = y2 - y1 > 0 and (x2 - x1) / (y2 - y1) or 0
-  local dx13 = y3 - y1 > 0 and (x3 - x1) / (y3 - y1) or 0
-  local dx23 = y3 - y2 > 0 and (x3 - x2) / (y3 - y2) or 0
+  local dx12 = 0
+  if y2 - y1 > 0 then 
+    dx12 = (x2 - x1) / (y2 - y1)
+  end
   
-  -- top half
+  local dx13 = 0
+  if y3 - y1 > 0 then
+    dx13 = (x3 - x1) / (y3 - y1)
+  end
+  
+  local dx23 = 0
+  if y3 - y2 > 0 then
+    dx23 = (x3 - x2) / (y3 - y2)
+  end
+  
+  -- draw the triangle in two parts
   local sx, ex = x1, x1
+  
+  -- top flat part
   for y = y1, y2 do
-    line(sx, y, ex, y, col)
+    if y >= 0 and y <= 127 then
+      line(sx, y, ex, y, col)
+    end
     sx += dx12
     ex += dx13
   end
   
-  -- bottom half
+  -- bottom flat part
   sx = x2
   for y = y2, y3 do
-    line(sx, y, ex, y, col)
+    if y >= 0 and y <= 127 then
+      line(sx, y, ex, y, col)
+    end
     sx += dx23
     ex += dx13
   end
 end
-
--- process incoming model data
-function receive_model_data(v, f)
-  vertices = v
-  faces = f
-  center_model()
-end
-
--- handle command from JavaScript
-function receive_command(cmd, val)
-  if cmd == "wireframe" then
-    wireframe = val
-  elseif cmd == "fill" then
-    draw_filled = val
-  elseif cmd == "color" then
-    model_color = val
-  end
-end
-
--- data interface (for web integration)
-function data_interface()
-  -- this will be replaced by js integration
-  -- when exported to web
-end
-
--- Integration with JavaScript message system
--- This gets replaced with actual JS handlers when exported
-function js_message_handler(data)
-  if data.type == "model_data" then
-    receive_model_data(data.vertices, data.faces)
-  elseif data.type == "command" then
-    receive_command(data.command, data.value)
-  end
-end
-
--- This stubs out JS message handling for standalone PICO-8
--- When exported to HTML, this gets replaced
-pico8_buttons = {0,0,0,0,0,0,0,0}
-pico8_mouse = {0,0,0,0,0}
-window_location_search = ""
 
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
