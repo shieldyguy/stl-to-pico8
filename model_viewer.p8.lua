@@ -863,10 +863,10 @@ function _draw()
   print("verts: "..#current_model.vertices, 2, 2, 11)
   print("faces: "..#current_model.faces, 2, 9, 11)
 
-  local info_mode = btn(4,1)
+  local info_mode = btn(5,1)
   
   if not info_mode then
-    print("tab: info", 2, 121, 6)
+    print("q: info", 2, 121, 6)
   else
     -- Model info
     print("model r_x: "..model.rot_x, 2, 16, 11)
