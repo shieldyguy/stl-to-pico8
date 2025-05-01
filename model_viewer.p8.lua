@@ -860,14 +860,15 @@ function _draw()
   -- draw all faces of the model
   draw_model(current_model)
 
+  print("verts: "..#current_model.vertices, 2, 2, 11)
+  print("faces: "..#current_model.faces, 2, 9, 11)
+
   local info_mode = btn(4,1)
   
   if not info_mode then
     print("tab: info", 2, 121, 6)
   else
     -- Model info
-    print("verts: "..#current_model.vertices, 2, 2, 11)
-    print("faces: "..#current_model.faces, 2, 9, 11)
     print("model r_x: "..model.rot_x, 2, 16, 11)
     print("model r_y: "..model.rot_y, 2, 23, 11)
     -- Camera info
