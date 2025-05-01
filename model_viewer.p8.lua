@@ -814,18 +814,35 @@ function _update()
     -- State changed, but we'll let JS poll for the new state
   end
 
-  -- Rest of update code
+  -- Player 0 controls (model rotation)
   if btn(0) then model.rot_y -= 0.01 end
   if btn(1) then model.rot_y += 0.01 end
+  if btn(2) then model.rot_x -= 0.01 end
+  if btn(3) then model.rot_x += 0.01 end
   
-  -- Rotation controls
-  if btn(2) then model.rot_x -= 0.01 end -- Up arrow for X rotation
-  if btn(3) then model.rot_x += 0.01 end -- Down arrow for X rotation
+  -- Wireframe toggle with player 0's O button
+  if btnp(4) then 
+    wireframe = not wireframe
+    print("wireframe: "..(wireframe and "on" or "off"), 2, 100, 7)
+  end
   
-  -- Light direction controls
-  if btn(4) then light_dir.x -= 0.01 end      -- Left (using O)
-  if btn(5) then light_dir.x += 0.01 end      -- Right (using X)
-  if btnp(4) then wireframe = not wireframe end  -- Toggle wireframe (O)
+  -- Player 1 camera controls (fly mode)
+  local camera_speed = 0.05
+  
+  -- Check if player 1's O button is pressed (for zoom mode)
+  local p1_zoom_mode = btn(5)
+  
+  if p1_zoom_mode then
+    -- When O is held, up/down controls zoom (camera z)
+    if btn(3, 1) then camera.z -= camera_speed end  -- Zoom in
+    if btn(2, 1) then camera.z += camera_speed end  -- Zoom out
+  else
+    -- Normal DPAD camera panning
+    if btn(1, 1) then camera.x -= camera_speed end  -- Left
+    if btn(0, 1) then camera.x += camera_speed end  -- Right
+    if btn(3, 1) then camera.y -= camera_speed end  -- Up
+    if btn(2, 1) then camera.y += camera_speed end  -- Down
+  end
   
   -- Normalize light direction after changes
   local len = sqrt(light_dir.x^2 + light_dir.y^2 + light_dir.z^2)
@@ -839,17 +856,31 @@ end
 -- draw test triangle
 function _draw()
   cls(0)
-  print("verts: "..#current_model.vertices, 2, 2, 11)
-  print("faces: "..#current_model.faces, 2, 9, 11)
-  print("r_x: "..model.rot_x, 2, 16, 11)
-  print("r_y: "..model.rot_y, 2, 23, 11)
-  
+
   -- draw all faces of the model
   draw_model(current_model)
+
+  local info_mode = btn(4,1)
   
-  --print("⬅️➡️ rotate y", 2, 107, 6)
-  --print("⬆️⬇️ rotate x", 2, 114, 6)
-  print("z: wireframe: "..(wireframe and "on" or "off"), 2, 121, 6)
+  if not info_mode then
+    print("tab: info", 2, 121, 6)
+  else
+    -- Model info
+    print("verts: "..#current_model.vertices, 2, 2, 11)
+    print("faces: "..#current_model.faces, 2, 9, 11)
+    print("model r_x: "..model.rot_x, 2, 16, 11)
+    print("model r_y: "..model.rot_y, 2, 23, 11)
+    -- Camera info
+    print("cam_x: "..camera.x, 2, 30, 12)
+    print("cam_y: "..camera.y, 2, 37, 12)
+    print("cam_z: "..camera.z, 2, 44, 12)
+    print("wireframe: "..(wireframe and "on" or "off"), 2, 51, 7)
+    -- Control info (at bottom of screen)
+    print("⬅️➡️⬆️⬇️: rotate model", 2, 100, 6)
+    print("z: toggle wireframe", 2, 107, 6)
+    print("sfed: move camera", 2, 114, 6)
+    print("m: zoom camera", 2, 121, 6)
+  end
 end
 
 -- transform a single vertex
