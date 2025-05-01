@@ -150,21 +150,6 @@
 
           <br />
 
-          <div class="pico8_el" onclick="Module.pico8Reset();">Reset</div>
-
-          <div class="pico8_el" onclick="Module.pico8TogglePaused();">
-            Pause
-          </div>
-
-          <div
-            class="pico8_el"
-            onclick="Module.requestFullScreen(true, false);"
-          >
-            Fullscreen
-          </div>
-
-          <div class="pico8_el" onclick="Module.pico8ToggleSound();">Sound</div>
-
           <br />
         </div>
       </div>
@@ -332,7 +317,6 @@
 
           // Enable the send button now that we have a processed model
           document.getElementById("send-to-pico8-button").disabled = false;
-          window.decimatedModel = null; // Clear any previous decimated model
         });
 
       // Export Lua button behavior
