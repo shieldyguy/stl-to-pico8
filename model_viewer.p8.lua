@@ -284,6 +284,13 @@ local update_communic8 = nil
 -- Define RPC functions for communic8
 local functions = {}
 
+-- Variables for receiving model data
+local received_vertices = {}
+local received_faces = {}
+local expected_vertices = 0
+local expected_faces = 0
+local is_receiving = false
+
 -- RPC for setting wireframe state (ID 0)
 functions[0] = {
   input={arg_types.boolean},
@@ -319,6 +326,97 @@ functions[3] = {
   output={},
   execute=function(args)
     model_color = args[1] -- Update the global model_color variable
+    -- No return value needed
+  end
+}
+
+-- RPC for starting model transfer (ID 4)
+functions[4] = {
+  input={arg_types.number, arg_types.number}, -- vertex_count, face_count
+  output={},
+  execute=function(args)
+    expected_vertices = args[1]
+    expected_faces = args[2]
+    received_vertices = {}
+    received_faces = {}
+    is_receiving = true
+    print("receiving model: "..expected_vertices.."v/"..expected_faces.."f", 0, 110, 7)
+    -- No return value needed
+  end
+}
+
+-- RPC for receiving vertex chunk (ID 5)
+functions[5] = {
+  -- Expect chunk_index (Number) and an array of Strings for vertex coordinates
+  input={arg_types.number, arg_types.array(arg_types.string)}, 
+  output={},
+  execute=function(args)
+    if not is_receiving then return end -- Ignore if not receiving
+
+    local chunk_index = args[1]
+    local chunk_data = args[2] -- This is now an array of strings
+    -- Process chunk_data [x1_str, y1_str, z1_str, x2_str, y2_str, z2_str, ...]
+    local i = 1
+    while i <= #chunk_data do
+      -- Use tonum() to convert strings back to PICO-8 numbers
+      add(received_vertices, {x=tonum(chunk_data[i]), y=tonum(chunk_data[i+1]), z=tonum(chunk_data[i+2])})
+      i += 3
+    end
+    --print("got vert chunk "..chunk_index.." #"..#received_vertices, 0, 110, 13)
+    -- No return value needed
+  end
+}
+
+-- RPC for receiving face chunk (ID 6)
+functions[6] = {
+  input={arg_types.number, arg_types.array(arg_types.number)}, -- chunk_index, face_data_chunk
+  output={},
+  execute=function(args)
+    if not is_receiving then return end -- Ignore if not receiving
+
+    local chunk_index = args[1]
+    local chunk_data = args[2]
+    -- Process chunk_data [f1v1, f1v2, f1v3, f2v1, f2v2, f2v3, ...]
+    local i = 1
+    while i <= #chunk_data do
+      add(received_faces, {chunk_data[i], chunk_data[i+1], chunk_data[i+2]})
+      i += 3
+    end
+    --print("got face chunk "..chunk_index.." #"..#received_faces, 0, 117, 13)
+    -- No return value needed
+  end
+}
+
+-- RPC for ending model transfer (ID 7)
+functions[7] = {
+  input={},
+  output={},
+  execute=function(args)
+    if not is_receiving then return end -- Ignore if not receiving
+
+    print("transfer done. got "..#received_vertices.."v/"..#received_faces.."f", 0, 110, 11)
+
+    -- Validate received data
+    if #received_vertices == expected_vertices and #received_faces == expected_faces then
+      -- This check should no longer be needed now that current_model is global,
+      -- but keeping it for robustness
+      if current_model == nil then
+        print("error: current_model still nil!", 0, 100, 8) 
+        current_model = {}
+      end
+      -- Replace current model
+      current_model.vertices = received_vertices
+      current_model.faces = received_faces
+      center_model() -- Recenter and scale the new model
+      print("model updated successfully!", 0, 117, 8)
+    else
+      print("error: data mismatch!", 0, 117, 8)
+      -- Optionally revert or keep old model
+    end
+    
+    is_receiving = false
+    expected_vertices = 0
+    expected_faces = 0
     -- No return value needed
   end
 }
@@ -665,7 +763,7 @@ local cube = {
 }
 
 -- current model to display
-local current_model = cube
+current_model = cube
 
 -- camera settings
 local camera = {

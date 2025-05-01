@@ -229,6 +229,37 @@
         var lastSentFillState = null;
         var lastSentColorValue = null;
 
+        // Define RPC functions for model transfer
+        var startModelTransfer = Communic8.RPC({
+          id: 4, // Assign a new ID
+          input: [Communic8.ArgTypes.Number, Communic8.ArgTypes.Number], // vertex_count, face_count
+          output: [],
+        });
+
+        var sendVertexChunk = Communic8.RPC({
+          id: 5, // Assign a new ID
+          input: [
+            Communic8.ArgTypes.Number,
+            Communic8.ArgTypes.Array(Communic8.ArgTypes.String),
+          ],
+          output: [],
+        });
+
+        var sendFaceChunk = Communic8.RPC({
+          id: 6, // Assign a new ID
+          input: [
+            Communic8.ArgTypes.Number,
+            Communic8.ArgTypes.Array(Communic8.ArgTypes.Number),
+          ], // chunk_index, face_data_chunk [f1v1, f1v2, f1v3, ...]
+          output: [],
+        });
+
+        var endModelTransfer = Communic8.RPC({
+          id: 7, // Assign a new ID
+          input: [],
+          output: [],
+        });
+
         // Add event listener to wireframe checkbox
         wireframeCheckbox.addEventListener("change", function (event) {
           const isChecked = event.target.checked;
@@ -271,7 +302,118 @@
 
         // Poll every 250ms
         setInterval(pollWireframeState, 250);
-      });
+
+        // Add click listener for the Send to PICO-8 button (MOVED HERE)
+        document
+          .getElementById("send-to-pico8-button")
+          .addEventListener("click", async () => {
+            const modelToSend = window.decimatedModel || window.dedupedModel;
+            if (!modelToSend) {
+              console.error("No model data available to send.");
+              alert("No model data loaded or processed yet!");
+              return;
+            }
+
+            const button = document.getElementById("send-to-pico8-button");
+            button.disabled = true;
+            button.textContent = "Sending...";
+            console.log("Starting model transfer...");
+
+            try {
+              // 1. Prepare data
+              const vertexCount = modelToSend.vertices.length;
+              const faceCount = modelToSend.faces.length;
+
+              // Flatten vertices: [x1_str, y1_str, z1_str, x2_str, y2_str, z2_str, ...]
+              const flatVertices = [];
+              modelToSend.vertices.forEach((v) => {
+                // Convert directly to string with desired precision
+                flatVertices.push(v.x.toFixed(2));
+                flatVertices.push(v.y.toFixed(2));
+                flatVertices.push(v.z.toFixed(2));
+              });
+
+              // Flatten faces: [f1v1, f1v2, f1v3, f2v1, f2v2, f2v3, ...] (already 1-based)
+              const flatFaces = [];
+              modelToSend.faces.forEach((f) => {
+                flatFaces.push(f[0]);
+                flatFaces.push(f[1]);
+                flatFaces.push(f[2]);
+              });
+
+              // 2. Send start signal
+              console.log(
+                `Sending startModelTransfer(${vertexCount}, ${faceCount})`
+              );
+              await bridge.send(startModelTransfer(vertexCount, faceCount)); // Use await for simplicity
+
+              // 3. Send vertex chunks
+              const VERTEX_CHUNK_SIZE = 8 * 3; // 8 vertices per chunk (24 numbers)
+              console.log(
+                `Sending ${vertexCount} vertices in chunks of ${
+                  VERTEX_CHUNK_SIZE / 3
+                }...`
+              );
+              for (let i = 0; i < flatVertices.length; i += VERTEX_CHUNK_SIZE) {
+                const chunkIndex = Math.floor(i / VERTEX_CHUNK_SIZE);
+                const chunk = flatVertices.slice(i, i + VERTEX_CHUNK_SIZE);
+                console.log(
+                  `  Sending vertex chunk ${chunkIndex} (${
+                    chunk.length / 3
+                  } vertices)`
+                );
+                await bridge.send(sendVertexChunk(chunkIndex, chunk));
+                // Optional small delay if needed, communic8 handles buffering
+                // await new Promise(resolve => setTimeout(resolve, 10));
+              }
+              console.log("Vertex chunks sent.");
+
+              // 4. Send face chunks
+              const FACE_CHUNK_SIZE = 8 * 3; // 8 faces per chunk (24 numbers)
+              console.log(
+                `Sending ${faceCount} faces in chunks of ${
+                  FACE_CHUNK_SIZE / 3
+                }...`
+              );
+              for (let i = 0; i < flatFaces.length; i += FACE_CHUNK_SIZE) {
+                const chunkIndex = Math.floor(i / FACE_CHUNK_SIZE);
+                const chunk = flatFaces.slice(i, i + FACE_CHUNK_SIZE);
+                console.log(
+                  `  Sending face chunk ${chunkIndex} (${
+                    chunk.length / 3
+                  } faces)`
+                );
+                await bridge.send(sendFaceChunk(chunkIndex, chunk));
+                // Optional small delay
+                // await new Promise(resolve => setTimeout(resolve, 10));
+              }
+              console.log("Face chunks sent.");
+
+              // 5. Send end signal
+              console.log("Sending endModelTransfer()");
+              await bridge.send(endModelTransfer());
+
+              console.log("Model transfer complete.");
+              button.textContent = "Sent!";
+              setTimeout(() => {
+                button.textContent = "Send to PICO-8";
+                button.disabled = false; // Re-enable after a short delay
+              }, 1500);
+            } catch (error) {
+              console.error("Error during model transfer:", error);
+              alert("Error sending model data to PICO-8. Check console.");
+              button.textContent = "Transfer Failed";
+              setTimeout(() => {
+                // Reset button after error
+                button.textContent = "Send to PICO-8";
+                // Only re-enable if a model is still loaded
+                button.disabled = !(
+                  window.decimatedModel || window.dedupedModel
+                );
+              }, 2000);
+            }
+          }); // End of send-to-pico8-button listener
+      }); // End of DOMContentLoaded listener
     </script>
 
     <script>
