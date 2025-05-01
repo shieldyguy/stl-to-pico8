@@ -33,7 +33,7 @@ function center_model()
     local v = current_model.vertices[i]
     v.x = (v.x - center_x) * scale
     v.y = (v.y - center_y) * scale
-    v.z = (v.z - center_z) * scale
+    v.z = ((v.z - center_z) * scale)
   end
 end
 
@@ -43,9 +43,9 @@ local wireframe = true
 local model_color = 7 -- white
 
 -- lighting configuration
-local light_dir = {x=0.5, y=-0.7, z=0.5} -- Diagonal light from upper right
-local light_intensity = 0.8 -- Base light intensity (0-1)
-local ambient_light = 0.2 -- Ambient light level (0-1)
+local light_dir = {x=-0.2, y=-0.9, z=-0.2}
+local light_intensity = 10.0 -- Base light intensity (0-1)
+local ambient_light = 0.2-- Ambient light level (0-1)
 
 -- communic8 stub code
 _communic8_chars = "\n\32\33\34\35\36\37\38\39\40\41\42\43\44\45\46\47\48\49\50\51\52\53\54\55\56\57\58\59\60\61\62\63\64\65\66\67\68\69\70\71\72\73\74\75\76\77\78\79\80\81\82\83\84\85\86\87\88\89\90\91\92\93\94\95\96\97\98\99\100\101\102\103\104\105\106\107\108\109\110\111\112\113\114\115\116\117\118\119\120\121\122\123\124\125\126\127\128\129\130\131\132\133\134\135\136\137\138\139\140\141\142\143\144\145\146\147\148\149\150\151\152\153"
@@ -325,27 +325,342 @@ functions[3] = {
 
 -- simple cube model
 local cube = {
-  -- vertices
-  vertices = {
-    {x=-1, y=-1, z=-1}, -- 1: front bottom left
-    {x= 1, y=-1, z=-1}, -- 2: front bottom right
-    {x= 1, y= 1, z=-1}, -- 3: front top right
-    {x=-1, y= 1, z=-1}, -- 4: front top left
-    {x=-1, y=-1, z= 1}, -- 5: back bottom left
-    {x= 1, y=-1, z= 1}, -- 6: back bottom right
-    {x= 1, y= 1, z= 1}, -- 7: back top right
-    {x=-1, y= 1, z= 1}  -- 8: back top left
-  },
-  
-  -- faces (triangles)
-  faces = {
-    {3, 2, 1}, {4, 3, 1}, -- front (z = -1)
-    {8, 5, 6}, {7, 8, 6}, -- back (z = 1)
-    {2, 6, 5}, {1, 2, 5}, -- bottom (y = -1)
-    {8, 7, 3}, {4, 8, 3}, -- top (y = 1)
-    {4, 1, 5}, {8, 4, 5}, -- left (x = -1)
-    {7, 6, 2}, {3, 7, 2}  -- right (x = 1)
-  }
+  vertices={
+    {x=0.26,y=0.10,z=2.23},
+    {x=0.23,y=0.15,z=2.19},
+    {x=0.14,y=0.20,z=2.23},
+    {x=0.16,y=0.14,z=2.17},
+    {x=0.12,y=0.20,z=2.13},
+    {x=0.16,y=0.20,z=2.48},
+    {x=0.08,y=0.24,z=2.49},
+    {x=0.19,y=0.31,z=1.43},
+    {x=0.14,y=0.35,z=1.38},
+    {x=0.18,y=0.32,z=1.30},
+    {x=0.06,y=0.36,z=1.30},
+    {x=0.17,y=0.53,z=1.49},
+    {x=0.14,y=-0.09,z=1.22},
+    {x=0.11,y=0.46,z=1.69},
+    {x=-0.11,y=-0.30,z=1.33},
+    {x=-0.10,y=-0.31,z=1.30},
+    {x=-0.15,y=-0.29,z=1.28},
+    {x=0.23,y=0.06,z=2.48},
+    {x=0.12,y=0.43,z=1.65},
+    {x=0.25,y=0.30,z=2.04},
+    {x=0.27,y=0.24,z=1.87},
+    {x=0.14,y=0.13,z=2.10},
+    {x=0.02,y=0.06,z=2.19},
+    {x=0.13,y=0.02,z=2.47},
+    {x=-0.18,y=-0.06,z=2.05},
+    {x=-0.08,y=-0.15,z=2.00},
+    {x=-0.19,y=-0.15,z=1.98},
+    {x=-0.24,y=-0.18,z=1.87},
+    {x=-0.28,y=-0.13,z=1.83},
+    {x=-0.18,y=0.16,z=1.71},
+    {x=-0.17,y=0.25,z=1.26},
+    {x=0.04,y=0.46,z=1.59},
+    {x=-0.16,y=0.16,z=2.01},
+    {x=-0.19,y=-0.06,z=1.59},
+    {x=0.22,y=0.45,z=2.02},
+    {x=0.13,y=0.50,z=1.98},
+    {x=-0.15,y=0.28,z=1.32},
+    {x=0.73,y=0.29,z=0.05},
+    {x=0.72,y=0.38,z=0.05},
+    {x=0.16,y=0.63,z=1.68},
+    {x=0.24,y=0.14,z=1.14},
+    {x=0.25,y=0.09,z=1.84},
+    {x=0.25,y=0.13,z=1.55},
+    {x=0.13,y=-0.06,z=1.33},
+    {x=0.04,y=0.02,z=1.01},
+    {x=-0.18,y=-0.23,z=1.33},
+    {x=0.13,y=-0.07,z=1.65},
+    {x=0.09,y=-0.15,z=1.66},
+    {x=0.18,y=0.14,z=0.98},
+    {x=-0.10,y=-0.44,z=1.26},
+    {x=0.02,y=-0.18,z=0.97},
+    {x=-0.03,y=0.13,z=0.45},
+    {x=-0.09,y=0.15,z=0.44},
+    {x=-0.10,y=0.17,z=0.40},
+    {x=-0.07,y=0.13,z=0.36},
+    {x=-0.15,y=0.44,z=1.27},
+    {x=-0.16,y=-0.11,z=1.16},
+    {x=-0.15,y=-0.16,z=0.97},
+    {x=-0.16,y=-0.06,z=0.98},
+    {x=-0.03,y=0.25,z=0.82},
+    {x=-0.16,y=0.26,z=0.06},
+    {x=-0.09,y=0.20,z=0.06},
+    {x=-0.20,y=0.07,z=0.06},
+    {x=-0.06,y=0.10,z=0.06},
+    {x=-0.03,y=-0.83,z=0.06},
+    {x=-0.13,y=-0.72,z=0.06},
+    {x=-0.66,y=-0.49,z=0.06},
+    {x=-0.67,y=-0.38,z=0.06},
+    {x=-0.73,y=-0.37,z=0.06},
+    {x=-0.64,y=-0.13,z=0.06},
+    {x=-0.38,y=-0.25,z=0.06},
+    {x=-0.12,y=0.44,z=1.30},
+    {x=-0.45,y=0.18,z=0.06},
+    {x=-0.23,y=0.47,z=0.06},
+    {x=-0.06,y=0.55,z=0.06},
+    {x=-0.16,y=0.76,z=0.05},
+    {x=-0.07,y=0.78,z=0.05},
+    {x=0.17,y=0.19,z=0.06},
+    {x=0.20,y=0.45,z=0.06},
+    {x=0.15,y=0.84,z=0.05},
+    {x=0.20,y=0.14,z=0.09},
+    {x=0.48,y=0.68,z=0.05},
+    {x=0.20,y=0.21,z=0.97},
+    {x=0.01,y=-0.15,z=0.68},
+    {x=-0.16,y=-0.03,z=0.62},
+    {x=-0.15,y=0.02,z=0.21},
+    {x=-0.12,y=-0.16,z=0.42},
+    {x=-0.16,y=-0.15,z=0.37},
+    {x=-0.15,y=-0.21,z=0.67},
+    {x=-0.10,y=-0.29,z=0.09},
+    {x=-0.24,y=-0.46,z=0.06},
+    {x=0.65,y=0.10,z=0.05},
+    {x=0.36,y=-0.29,z=0.06},
+    {x=0.21,y=-0.69,z=0.06},
+    },
+    faces={
+    {3,2,4},
+    {1,4,2},
+    {6,2,3},
+    {8,10,9},
+    {9,10,11},
+    {15,16,17},
+    {1,2,18},
+    {2,6,18},
+    {20,22,4},
+    {22,20,5},
+    {22,4,20},
+    {4,22,20},
+    {23,1,18},
+    {23,18,24},
+    {25,27,22},
+    {27,26,22},
+    {29,27,25},
+    {29,28,27},
+    {22,5,33},
+    {25,22,33},
+    {30,33,5},
+    {33,29,25},
+    {30,29,33},
+    {20,35,5},
+    {5,35,36},
+    {6,3,7},
+    {6,24,18},
+    {24,6,7},
+    {5,23,3},
+    {5,22,23},
+    {24,7,23},
+    {23,7,3},
+    {9,11,37},
+    {31,37,11},
+    {37,31,34},
+    {34,9,37},
+    {37,9,34},
+    {37,30,9},
+    {37,34,29},
+    {19,9,30},
+    {37,29,30},
+    {30,5,19},
+    {5,36,19},
+    {5,19,14},
+    {14,19,36},
+    {14,19,5},
+    {14,9,19},
+    {9,14,32},
+    {32,40,12},
+    {32,14,40},
+    {36,40,14},
+    {40,36,35},
+    {21,20,42},
+    {42,8,21},
+    {42,43,8},
+    {21,9,19},
+    {21,8,9},
+    {14,21,19},
+    {9,14,19},
+    {40,20,21},
+    {43,41,8},
+    {20,40,35},
+    {9,32,8},
+    {41,10,8},
+    {32,12,8},
+    {13,41,43},
+    {13,44,15},
+    {15,16,13},
+    {14,12,40},
+    {32,12,14},
+    {9,32,14},
+    {32,9,8},
+    {8,12,32},
+    {22,4,1},
+    {22,1,23},
+    {22,5,4},
+    {3,4,5},
+    {14,40,21},
+    {43,42,44},
+    {47,44,42},
+    {4,42,20},
+    {42,4,22},
+    {22,47,42},
+    {47,48,44},
+    {44,13,43},
+    {10,41,49},
+    {45,49,41},
+    {45,41,13},
+    {16,13,44},
+    {15,16,44},
+    {34,48,15},
+    {29,48,34},
+    {46,15,48},
+    {28,46,48},
+    {29,47,48},
+    {48,15,44},
+    {26,48,47},
+    {26,47,22},
+    {48,26,28},
+    {26,27,28},
+    {48,47,44},
+    {29,34,44},
+    {29,44,47},
+    {16,51,13},
+    {13,16,44},
+    {44,16,15},
+    {34,44,15},
+    {44,34,15},
+    {44,16,15},
+    {17,16,50},
+    {17,50,16},
+    {48,44,15},
+    {17,16,15},
+    {17,15,46},
+    {54,55,53},
+    {31,11,9},
+    {31,9,56},
+    {57,16,13},
+    {44,13,16},
+    {57,13,44},
+    {44,34,57},
+    {57,58,16},
+    {58,51,16},
+    {59,58,57},
+    {59,57,45},
+    {31,11,57},
+    {53,52,60},
+    {60,52,45},
+    {60,45,11},
+    {31,57,34},
+    {57,11,13},
+    {45,57,13},
+    {63,62,61},
+    {64,62,63},
+    {54,62,55},
+    {46,28,34},
+    {28,29,34},
+    {15,17,46},
+    {34,15,46},
+    {13,11,45},
+    {67,68,69},
+    {71,70,68},
+    {72,9,11},
+    {56,72,11},
+    {31,56,11},
+    {9,72,56},
+    {73,70,63},
+    {63,61,73},
+    {61,75,74},
+    {62,75,61},
+    {75,76,74},
+    {75,77,76},
+    {75,62,79},
+    {77,75,80},
+    {62,78,79},
+    {75,79,80},
+    {62,81,78},
+    {64,81,62},
+    {79,82,80},
+    {39,79,78},
+    {79,39,82},
+    {60,10,83},
+    {10,60,11},
+    {51,45,13},
+    {45,51,52},
+    {10,49,83},
+    {83,49,60},
+    {45,60,49},
+    {53,60,45},
+    {53,45,52},
+    {45,49,83},
+    {49,45,83},
+    {54,53,52},
+    {52,55,54},
+    {53,55,52},
+    {52,51,84},
+    {84,55,52},
+    {55,84,87},
+    {55,87,88},
+    {86,55,88},
+    {62,64,55},
+    {89,84,51},
+    {58,89,51},
+    {58,85,89},
+    {85,58,59},
+    {59,58,51},
+    {58,59,51},
+    {89,85,84},
+    {85,88,84},
+    {85,86,88},
+    {88,87,84},
+    {88,55,86},
+    {88,86,55},
+    {63,71,86},
+    {71,90,87},
+    {71,87,86},
+    {71,63,70},
+    {91,71,68},
+    {91,68,67},
+    {45,52,59},
+    {85,59,52},
+    {52,55,85},
+    {86,85,55},
+    {63,86,55},
+    {63,55,64},
+    {64,62,54},
+    {90,64,55},
+    {92,39,81},
+    {81,39,78},
+    {54,55,64},
+    {65,94,66},
+    {93,66,94},
+    {93,81,64},
+    {64,90,93},
+    {90,55,87},
+    {87,55,86},
+    {90,66,93},
+    {90,91,66},
+    {91,90,71},
+    {82,39,38},
+    {82,38,39},
+    {39,92,81},
+    {82,39,81},
+    {93,94,65},
+    {82,81,93},
+    {77,80,82},
+    {74,76,77},
+    {82,93,65},
+    {77,82,65},
+    {73,61,74},
+    {77,65,66},
+    {77,66,91},
+    {74,77,91},
+    {74,91,67},
+    {73,74,67},
+    {67,69,68},
+    {70,73,67},
+    {67,68,70},
+    }
   
 }
 
@@ -355,8 +670,8 @@ local current_model = cube
 -- camera settings
 local camera = {
   x = 0,
-  y = 0,
-  z = 0   -- camera at origin
+  y = -1,
+  z = 3   -- camera at origin
 }
 
 -- model transform
@@ -364,7 +679,8 @@ local model = {
   x = 0,
   y = 0,
   z = 5,  -- model 5 units in front of camera
-  rot_y = 0
+  rot_x = 2.74, -- Add X rotation
+  rot_y = 0.199
 }
 
 -- initialization
@@ -404,11 +720,11 @@ function _update()
   if btn(0) then model.rot_y -= 0.01 end
   if btn(1) then model.rot_y += 0.01 end
   
-  -- Light direction controls
-  if btn(2) then light_dir.y -= 0.01 end -- Up
-  if btn(3) then light_dir.y += 0.01 end -- Down
+  -- Rotation controls
+  if btn(2) then model.rot_x -= 0.01 end -- Up arrow for X rotation
+  if btn(3) then model.rot_x += 0.01 end -- Down arrow for X rotation
   
-  -- X and O buttons for light X direction and wireframe toggle
+  -- Light direction controls
   if btn(4) then light_dir.x -= 0.01 end      -- Left (using O)
   if btn(5) then light_dir.x += 0.01 end      -- Right (using X)
   if btnp(4) then wireframe = not wireframe end  -- Toggle wireframe (O)
@@ -425,39 +741,43 @@ end
 -- draw test triangle
 function _draw()
   cls(0)
-  
-  print("cube test", 2, 2, 7)
-  print("rot_y: "..model.rot_y, 2, 9, 11)
-  print("verts: "..#current_model.vertices, 2, 16, 11)
-  print("faces: "..#current_model.faces, 2, 23, 11)
-  
-  -- Show light direction
-  local lx, ly, lz = light_dir.x, light_dir.y, light_dir.z
-  print("light: "..flr(lx*100)/100 ..","..flr(ly*100)/100, 2, 30, 11)
+  print("verts: "..#current_model.vertices, 2, 2, 11)
+  print("faces: "..#current_model.faces, 2, 9, 11)
+  print("r_x: "..model.rot_x, 2, 16, 11)
+  print("r_y: "..model.rot_y, 2, 23, 11)
   
   -- draw all faces of the model
   draw_model(current_model)
   
-  print("⬅️➡️ rotate", 2, 107, 6)
-  print("⬆️⬇️ move light", 2, 114, 6)
-  print("🅾️ wireframe: "..(wireframe and "on" or "off"), 2, 121, 6)
+  --print("⬅️➡️ rotate y", 2, 107, 6)
+  --print("⬆️⬇️ rotate x", 2, 114, 6)
+  print("z: wireframe: "..(wireframe and "on" or "off"), 2, 121, 6)
 end
 
 -- transform a single vertex
 function transform_vertex(vtx)
-  -- step 1: apply rotation around y axis
+  -- step 1: apply rotation around x axis
+  local sin_x = sin(model.rot_x)
+  local cos_x = cos(model.rot_x)
+  
+  local y0 = vtx.y * cos_x - vtx.z * sin_x
+  local z0 = vtx.y * sin_x + vtx.z * cos_x
+  local x0 = vtx.x -- x remains unchanged by x-rotation
+
+  -- step 2: apply rotation around y axis (using result from x rotation)
   local sin_y = sin(model.rot_y)
   local cos_y = cos(model.rot_y)
   
-  local x1 = vtx.x * cos_y - vtx.z * sin_y
-  local z1 = vtx.x * sin_y + vtx.z * cos_y
+  local x1 = x0 * cos_y - z0 * sin_y
+  local z1 = x0 * sin_y + z0 * cos_y
+  local y1 = y0 -- y remains unchanged by y-rotation
   
-  -- step 2: apply translation (model position)
+  -- step 3: apply translation (model position)
   local x2 = x1 + model.x 
-  local y2 = vtx.y + model.y
+  local y2 = y1 + model.y
   local z2 = z1 + model.z
   
-  -- step 3: convert to camera space
+  -- step 4: convert to camera space
   local x3 = x2 - camera.x
   local y3 = y2 - camera.y
   local z3 = z2 - camera.z
@@ -606,9 +926,9 @@ function draw_face_with_vertices(v1, v2, v3)
     
     -- Draw wireframe
     if wireframe then
-      line(p1.screen_x, p1.screen_y, p2.screen_x, p2.screen_y, 1)
-      line(p2.screen_x, p2.screen_y, p3.screen_x, p3.screen_y, 1)
-      line(p3.screen_x, p3.screen_y, p1.screen_x, p1.screen_y, 1)
+      line(p1.screen_x, p1.screen_y, p2.screen_x, p2.screen_y, 11)
+      line(p2.screen_x, p2.screen_y, p3.screen_x, p3.screen_y, 11)
+      line(p3.screen_x, p3.screen_y, p1.screen_x, p1.screen_y, 11)
     end
   end
 end
