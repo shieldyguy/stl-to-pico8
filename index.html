@@ -119,8 +119,6 @@
       ></textarea>
     </section>
 
-    <!-- Include communic8 library -->
-    <script src="./node_modules/communic8/dist/communic8.js"></script>
     <script>
       const PICO_VERTEX_LIMIT = 256;
       const PICO_FACE_LIMIT = 512;
@@ -372,116 +370,6 @@
 
         return { vertices: simplifiedVerts, faces: newFaces };
       }
-
-      // --- communic8 Integration ---
-      const { connect, RPC, ArgTypes } = Communic8;
-
-      // Define RPCs (must match Lua side)
-      const receiveModelRpc = RPC({
-        id: 0,
-        input: [
-          ArgTypes.Array(
-            ArgTypes.Tuple(ArgTypes.Number, ArgTypes.Number, ArgTypes.Number)
-          ), // vertices
-          ArgTypes.Array(
-            ArgTypes.Tuple(ArgTypes.Number, ArgTypes.Number, ArgTypes.Number)
-          ), // faces
-        ],
-        output: [],
-      });
-
-      const setWireframeRpc = RPC({
-        id: 1,
-        input: [ArgTypes.Boolean],
-        output: [],
-      });
-
-      const setFillRpc = RPC({
-        id: 2,
-        input: [ArgTypes.Boolean],
-        output: [],
-      });
-
-      const setColorRpc = RPC({
-        id: 3,
-        input: [ArgTypes.Byte],
-        output: [],
-      });
-
-      // Connect to PICO-8 (this starts polling GPIO)
-      // Ensure the PICO-8 player (model_viewer.html) is running for this to connect
-      const bridge = connect();
-
-      // Rewire UI controls to use RPC
-      document
-        .getElementById("send-to-pico8-button")
-        .addEventListener("click", () => {
-          const model = window.decimatedModel || window.dedupedModel;
-          if (!model) {
-            console.error("No model data available to send.");
-            return;
-          }
-
-          // Format data for RPC
-          const verticesRpc = model.vertices.map((v) => [v.x, v.y, v.z]);
-          const facesRpc = model.faces.map((f) => [f[0], f[1], f[2]]);
-
-          console.log(
-            `Sending model via communic8: ${verticesRpc.length} verts, ${facesRpc.length} faces`
-          );
-
-          // Create the RPC call - no need for array wrapper here since receiveModelRpc expects two args
-          const rpcCall = receiveModelRpc(verticesRpc, facesRpc);
-
-          bridge
-            .send(rpcCall)
-            .then(() => console.log("Model data sent successfully."))
-            .catch((err) => console.error("Error sending model data:", err));
-        });
-
-      document
-        .getElementById("toggle-wireframe")
-        .addEventListener("change", function (e) {
-          const isChecked = e.target.checked;
-          console.log("Sending wireframe value:", typeof isChecked, isChecked); // Debug log
-
-          // Create the RPC call directly with the value
-          const rpcCall = setWireframeRpc(e.target.checked);
-
-          bridge
-            .send(rpcCall)
-            .catch((err) => console.error("Error setting wireframe:", err));
-        });
-
-      document
-        .getElementById("toggle-fill")
-        .addEventListener("change", function (e) {
-          const isChecked = e.target.checked;
-          console.log("Sending fill value:", typeof isChecked, isChecked); // Debug log
-
-          // Create the RPC call directly with the value
-          const rpcCall = setFillRpc(e.target.checked);
-
-          bridge
-            .send(rpcCall)
-            .catch((err) => console.error("Error setting fill:", err));
-        });
-
-      document
-        .getElementById("model-color")
-        .addEventListener("change", function (e) {
-          const colorByte = parseInt(e.target.value, 10);
-          console.log("Sending color value:", typeof colorByte, colorByte); // Debug log
-
-          // Create the RPC call directly with the value
-          const rpcCall = setColorRpc(colorByte);
-
-          bridge
-            .send(rpcCall)
-            .catch((err) => console.error("Error setting color:", err));
-        });
-
-      // --- End communic8 Integration ---
     </script>
   </body>
 </html>
