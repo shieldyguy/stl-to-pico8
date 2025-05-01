@@ -35,6 +35,38 @@
         margin-left: 10px;
         font-weight: bold;
       }
+
+      /* PICO-8 player styles from text.html */
+      canvas#canvas {
+        width: 512px;
+        height: 512px;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
+
+      .pico8_el {
+        float: left;
+        width: 85px;
+        display: inline-block;
+        margin: 1px;
+        padding: 4px;
+        text-align: center;
+        color: #fff;
+        background-color: #777;
+        font-family: verdana;
+        font-size: 9pt;
+        cursor: pointer;
+      }
+      .pico8_el a {
+        text-decoration: none;
+        color: #fff;
+      }
+      .pico8_el:hover {
+        background-color: #aaa;
+      }
+      .pico8_el:link {
+        background-color: #aaa;
+      }
     </style>
   </head>
 
@@ -78,14 +110,63 @@
     <section id="viewer-section">
       <h2>Model Viewer</h2>
       <div id="pico8-container">
-        <!-- Embed the PICO-8 player directly -->
-        <iframe
-          id="pico8_el"
-          width="256"
-          height="256"
-          src="./model_viewer.html"
-          style="border: none"
-        ></iframe>
+        <!-- PICO-8 player setup exactly like in text.html -->
+        <div style="width: 512px">
+          <canvas
+            class="emscripten"
+            id="canvas"
+            oncontextmenu="event.preventDefault()"
+          ></canvas>
+
+          <script type="text/javascript">
+            var canvas = document.getElementById("canvas");
+            canvas.width = 512;
+            canvas.height = 512;
+
+            // Show Emscripten environment where the canvas is
+            // Arguments are passed to PICO-8
+            var Module = {
+              arguments: ["-width", "512", "-height", "512"],
+            };
+            Module.canvas = canvas;
+          </script>
+
+          <!-- PICO-8 player JS (generated from PICO-8) -->
+          <script async type="text/javascript" src="model_viewer.js"></script>
+
+          <script>
+            // Key blocker - prevent cursor keys from scrolling page while playing cart
+            function onKeyDown_blocker(event) {
+              event = event || window.event;
+              var o = document.activeElement;
+              if (!o || o == document.body || o.tagName == "canvas") {
+                if ([32, 37, 38, 39, 40].indexOf(event.keyCode) > -1) {
+                  if (event.preventDefault) event.preventDefault();
+                }
+              }
+            }
+            document.addEventListener("keydown", onKeyDown_blocker, false);
+          </script>
+
+          <br />
+
+          <div class="pico8_el" onclick="Module.pico8Reset();">Reset</div>
+
+          <div class="pico8_el" onclick="Module.pico8TogglePaused();">
+            Pause
+          </div>
+
+          <div
+            class="pico8_el"
+            onclick="Module.requestFullScreen(true, false);"
+          >
+            Fullscreen
+          </div>
+
+          <div class="pico8_el" onclick="Module.pico8ToggleSound();">Sound</div>
+
+          <br />
+        </div>
       </div>
       <div id="viewer-controls" style="margin-top: 10px; display: block">
         <label
@@ -118,6 +199,95 @@
         style="width: 100%; margin-top: 10px"
       ></textarea>
     </section>
+
+    <!-- Add communic8.min.js to the document -->
+    <script src="communic8.min.js"></script>
+
+    <!-- Simple communic8 integration that matches the demo -->
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // Get references to UI controls
+        const wireframeCheckbox = document.getElementById("toggle-wireframe");
+        const fillCheckbox = document.getElementById("toggle-fill");
+        const colorSelect = document.getElementById("model-color");
+
+        // Simple communic8 setup (similar to text-example.js)
+        var bridge = Communic8.connect();
+
+        // Define RPC functions
+        var setWireframe = Communic8.RPC({
+          id: 0,
+          input: [Communic8.ArgTypes.Boolean],
+          output: [],
+        });
+
+        var getWireframeState = Communic8.RPC({
+          id: 1,
+          input: [],
+          output: [Communic8.ArgTypes.Boolean],
+        });
+
+        var setFill = Communic8.RPC({
+          id: 2,
+          input: [Communic8.ArgTypes.Boolean],
+          output: [],
+        });
+
+        var setColor = Communic8.RPC({
+          id: 3,
+          input: [Communic8.ArgTypes.Byte],
+          output: [],
+        });
+
+        // Track last sent states to avoid loops
+        var lastSentWireframeState = null;
+        var lastSentFillState = null;
+        var lastSentColorValue = null;
+
+        // Add event listener to wireframe checkbox
+        wireframeCheckbox.addEventListener("change", function (event) {
+          const isChecked = event.target.checked;
+          if (isChecked !== lastSentWireframeState) {
+            lastSentWireframeState = isChecked;
+            bridge.send(setWireframe(isChecked));
+          }
+        });
+
+        // Add event listener to fill checkbox
+        fillCheckbox.addEventListener("change", function (event) {
+          const isChecked = event.target.checked;
+          if (isChecked !== lastSentFillState) {
+            lastSentFillState = isChecked;
+            bridge.send(setFill(isChecked));
+          }
+        });
+
+        // Add event listener to color selector
+        colorSelect.addEventListener("change", function (event) {
+          const colorValue = parseInt(event.target.value, 10);
+          if (colorValue !== lastSentColorValue) {
+            lastSentColorValue = colorValue;
+            bridge.send(setColor(colorValue));
+          }
+        });
+
+        // Poll the wireframe state from PICO-8
+        function pollWireframeState() {
+          bridge.send(getWireframeState(), function (result) {
+            if (result && result.length > 0) {
+              const picoWireframeState = result[0];
+              if (wireframeCheckbox.checked !== picoWireframeState) {
+                wireframeCheckbox.checked = picoWireframeState;
+                lastSentWireframeState = picoWireframeState;
+              }
+            }
+          });
+        }
+
+        // Poll every 250ms
+        setInterval(pollWireframeState, 250);
+      });
+    </script>
 
     <script>
       const PICO_VERTEX_LIMIT = 256;

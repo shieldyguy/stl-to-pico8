@@ -185,6 +185,95 @@ print("🅾️ toggle wireframe: "..(wireframe and "on" or "off"), 2, 107, 6)
 5.  **Clean up `model_viewer.js`:**
     - Instruct user to remove the manually added `window.addEventListener("message", ...)` and `Module.pico8HandleMessage` function from `model_viewer.js`.
 
+## Integrate `communic8` for Wireframe Control
+
+**Goal:** Use the `communic8` library to allow the "Wireframe" checkbox in `index.html` to control the `wireframe` boolean variable within the `model_viewer.p8.lua` cartridge running in the iframe.
+
+**Status:**
+
+- [ ] Plan defined
+- [ ] Include `communic8` Libraries (JS & Lua)
+- [ ] Define RPC (JS & Lua)
+- [ ] Implement JS Side (`index.html`)
+- [ ] Implement Lua Side (`model_viewer.p8.lua`)
+- [ ] Remove Conflicting PICO-8 Input (Optional)
+
+**Plan:**
+
+1.  **Include `communic8` Libraries:**
+
+    - Add the necessary `<script>` tag for the `communic8` JavaScript library to the HTML file that loads the PICO-8 player (likely `model_viewer.html`, or ensure `index.html` can access the iframe's context where the library is loaded). Example: `<script src="path/to/communic8.min.js"></script>`.
+    - Copy the standard `communic8` Lua stub code (including `arg_types`, `init_communic8`, the coroutine logic, etc.) into `model_viewer.p8.lua`.
+
+2.  **Define RPC (JS & Lua):**
+
+    - We need one RPC to set the wireframe status. Let's call it `set_wireframe` with ID `0`.
+    - **Lua Definition (`functions` table in `model_viewer.p8.lua`):**
+      ```lua
+      functions[0] = {
+        input={arg_types.boolean},
+        output={},
+        execute=function(args)
+          wireframe = args[1] -- Update the global wireframe variable
+          -- No return value needed
+        end
+      }
+      ```
+    - **JS Definition (in the script within `index.html` or `model_viewer.html`):**
+      ```javascript
+      var setWireframe = Communic8.RPC({
+        id: 0,
+        input: [Communic8.ArgTypes.Boolean],
+        output: [],
+      });
+      ```
+
+3.  **Implement JS Side (`index.html` or related script):**
+
+    - Establish the `communic8` bridge after the iframe and PICO-8 module are loaded:
+      ```javascript
+      // Assuming 'pico8Iframe' is the iframe element
+      var pico8Window = pico8Iframe.contentWindow;
+      // Might need a delay or event listener for the module to be ready
+      var bridge = Communic8.connect(pico8Window); // Pass the iframe's window
+      ```
+    - Add an event listener to the wireframe checkbox (`id="toggle-wireframe"`):
+      ```javascript
+      const wireframeCheckbox = document.getElementById("toggle-wireframe");
+      wireframeCheckbox.addEventListener("change", function (event) {
+        const isChecked = event.target.checked;
+        if (bridge) {
+          bridge.send(setWireframe(isChecked));
+        } else {
+          console.error("Communic8 bridge not ready.");
+        }
+      });
+      ```
+    - Ensure the checkbox's initial state matches the default `wireframe` value in PICO-8.
+
+4.  **Implement Lua Side (`model_viewer.p8.lua`):**
+
+    - Add the `communic8` Lua stub code.
+    - Define the `functions` table containing the `set_wireframe` implementation (from step 2).
+    - In `_init()`: Initialize the communic8 system:
+      ```lua
+      update_communic8 = init_communic8(functions)
+      ```
+      (Declare `local update_communic8 = nil` near the top).
+    - In `_update()`: Call the communic8 update function at the beginning:
+      ```lua
+      if update_communic8 then
+        update_communic8()
+      end
+      -- Rest of _update() code...
+      ```
+
+5.  **Remove Conflicting PICO-8 Input (Optional but Recommended):**
+    - To prevent the PICO-8 'O' button and the HTML checkbox from fighting for control, comment out or remove the line in `_update()` that toggles the wireframe via `btnp(4)`:
+      ```lua
+      -- if btnp(4) then wireframe = not wireframe end  -- Toggle wireframe (O)
+      ```
+
 ## Testing
 
 After implementing these changes:
