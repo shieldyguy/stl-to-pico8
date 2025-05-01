@@ -178,8 +178,10 @@
 
       /* PICO-8 player styles from text.html */
       canvas#canvas {
-        width: 512px;
-        height: 512px;
+        width: 100%;
+        max-width: 1024px;
+        height: auto;
+        display: block;
         image-rendering: pixelated;
         image-rendering: crisp-edges;
       }
@@ -230,9 +232,6 @@
       <h2>Model Stats</h2>
       <p id="vertex-count">Vertices: 0</p>
       <p id="face-count">Faces: 0</p>
-      <p id="pico-vertex-count">PICO Vertices: 0</p>
-      <p id="pico-face-count">PICO Faces: 0</p>
-      <p id="warnings"></p>
     </section>
 
     <section id="decimation-controls">
@@ -248,11 +247,13 @@
       />
       <span id="grid-size-display">0.10</span>
       <button id="decimate-button">Decimate</button>
+      <p id="pico-vertex-count">PICO Vertices: 0</p>
+      <p id="pico-face-count">PICO Faces: 0</p>
+      <p id="warnings"></p>
+      <button id="send-to-pico8-button" style="margin-top: 10px" disabled>
+        Send to PICO-8
+      </button>
     </section>
-
-    <button id="send-to-pico8-button" style="margin-top: 10px" disabled>
-      Send to PICO-8
-    </button>
 
     <section id="viewer-section">
       <h2>Model Viewer</h2>
@@ -301,10 +302,7 @@
         </div>
       </div>
       <div id="viewer-controls" style="margin-top: 10px; display: block">
-        <label
-          ><input type="checkbox" id="toggle-wireframe" checked />
-          Wireframe</label
-        >
+        <label><input type="checkbox" id="toggle-wireframe" /> Wireframe</label>
         <label
           ><input type="checkbox" id="toggle-fill" checked /> Fill Faces</label
         >
@@ -314,7 +312,7 @@
             <option value="7">White</option>
             <option value="8">Red</option>
             <option value="11">Blue</option>
-            <option value="3">Green</option>
+            <option value="3" selected>Green</option>
             <option value="10">Yellow</option>
             <option value="14">Pink</option>
           </select>
@@ -433,6 +431,19 @@
             bridge.send(setColor(colorValue));
           }
         });
+
+        // Send initial defaults once on load
+        const initialFillChecked = fillCheckbox.checked;
+        const initialWireframeChecked = wireframeCheckbox.checked;
+        const initialColorValue = parseInt(colorSelect.value, 10);
+
+        lastSentFillState = initialFillChecked;
+        lastSentWireframeState = initialWireframeChecked;
+        lastSentColorValue = initialColorValue;
+
+        bridge.send(setFill(initialFillChecked));
+        bridge.send(setWireframe(initialWireframeChecked));
+        bridge.send(setColor(initialColorValue));
 
         // Poll the wireframe state from PICO-8
         function pollWireframeState() {
