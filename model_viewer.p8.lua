@@ -39,12 +39,12 @@ end
 
 -- configuration
 local draw_filled = true
-local wireframe = true
-local model_color = 7 -- white
+local wireframe = false
+local model_color = 3 -- green
 
 -- lighting configuration
 local light_dir = {x=-0.2, y=-0.9, z=-0.2}
-local light_intensity = 10.0 -- Base light intensity (0-1)
+local light_intensity = 20.0 -- Base light intensity (0-1)
 local ambient_light = 0.2-- Ambient light level (0-1)
 
 -- communic8 stub code
@@ -767,9 +767,9 @@ current_model = cube
 
 -- camera settings
 local camera = {
-  x = 0,
-  y = -1,
-  z = 3   -- camera at origin
+  x = -0.7998,
+  y = -0.9,
+  z = 2.9   -- camera at origin
 }
 
 -- model transform
@@ -778,7 +778,7 @@ local model = {
   y = 0,
   z = 5,  -- model 5 units in front of camera
   rot_x = 2.74, -- Add X rotation
-  rot_y = 0.199
+  rot_y = 1.29
 }
 
 -- initialization
@@ -879,8 +879,8 @@ function _draw()
     -- Control info (at bottom of screen)
     print("⬅️➡️⬆️⬇️: rotate model", 2, 100, 6)
     print("z: toggle wireframe", 2, 107, 6)
-    print("sfed: move camera", 2, 114, 6)
-    print("m: zoom camera", 2, 121, 6)
+    print("sfed: move model", 2, 114, 6)
+    print("m + ed: zoom camera", 2, 121, 6)
   end
 end
 
