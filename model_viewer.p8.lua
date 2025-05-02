@@ -41,6 +41,7 @@ end
 local draw_filled = true
 local wireframe = false
 local model_color = 3 -- green
+local circle_radius_divisor = 4.5 -- default circle radius divisor
 
 -- lighting configuration
 local light_dir = {x=-0.2, y=-0.9, z=-0.2}
@@ -326,6 +327,16 @@ functions[3] = {
   output={},
   execute=function(args)
     model_color = args[1] -- Update the global model_color variable
+    -- No return value needed
+  end
+}
+
+-- RPC for setting circle radius divisor (ID 8)
+functions[8] = {
+  input={arg_types.number},
+  output={},
+  execute=function(args)
+    circle_radius_divisor = args[1] -- Update the global circle_radius_divisor variable
     -- No return value needed
   end
 }
@@ -781,6 +792,17 @@ local model = {
   rot_y = 1.29
 }
 
+-- Add these variables to store sine and cosine values
+local sin_rot_x, cos_rot_x, sin_rot_y, cos_rot_y
+
+-- New function to update rotation values
+function update_rotation()
+  sin_rot_x = sin(model.rot_x)
+  cos_rot_x = cos(model.rot_x)
+  sin_rot_y = sin(model.rot_y)
+  cos_rot_y = cos(model.rot_y)
+end
+
 -- initialization
 function _init()
   cls(0)
@@ -807,6 +829,9 @@ function _update()
   if update_communic8 then
     update_communic8()
   end
+
+  -- Update rotation values
+  update_rotation()
 
   -- Track wireframe state changes
   if prev_wireframe != wireframe then
@@ -869,13 +894,13 @@ function _draw()
     print("q: info", 2, 121, 6)
   else
     -- Model info
-    print("model r_x: "..model.rot_x, 2, 16, 11)
-    print("model r_y: "..model.rot_y, 2, 23, 11)
+    print("model r_x: "..model.rot_x, 2, 30, 11)
+    print("model r_y: "..model.rot_y, 2, 37, 11)
     -- Camera info
-    print("cam_x: "..camera.x, 2, 30, 12)
-    print("cam_y: "..camera.y, 2, 37, 12)
-    print("cam_z: "..camera.z, 2, 44, 12)
-    print("wireframe: "..(wireframe and "on" or "off"), 2, 51, 7)
+    print("cam_x: "..camera.x, 2, 44, 12)
+    print("cam_y: "..camera.y, 2, 51, 12)
+    print("cam_z: "..camera.z, 2, 58, 12)
+    print("wireframe: "..(wireframe and "on" or "off"), 2, 65, 7)
     -- Control info (at bottom of screen)
     print("⬅️➡️⬆️⬇️: rotate model", 2, 100, 6)
     print("z: toggle wireframe", 2, 107, 6)
@@ -887,19 +912,13 @@ end
 -- transform a single vertex
 function transform_vertex(vtx)
   -- step 1: apply rotation around x axis
-  local sin_x = sin(model.rot_x)
-  local cos_x = cos(model.rot_x)
-  
-  local y0 = vtx.y * cos_x - vtx.z * sin_x
-  local z0 = vtx.y * sin_x + vtx.z * cos_x
+  local y0 = vtx.y * cos_rot_x - vtx.z * sin_rot_x
+  local z0 = vtx.y * sin_rot_x + vtx.z * cos_rot_x
   local x0 = vtx.x -- x remains unchanged by x-rotation
 
   -- step 2: apply rotation around y axis (using result from x rotation)
-  local sin_y = sin(model.rot_y)
-  local cos_y = cos(model.rot_y)
-  
-  local x1 = x0 * cos_y - z0 * sin_y
-  local z1 = x0 * sin_y + z0 * cos_y
+  local x1 = x0 * cos_rot_y - z0 * sin_rot_y
+  local z1 = x0 * sin_rot_y + z0 * cos_rot_y
   local y1 = y0 -- y remains unchanged by y-rotation
   
   -- step 3: apply translation (model position)
@@ -999,68 +1018,57 @@ function draw_model(model)
   -- draw faces in sorted order
   for i=1,#faces_to_draw do
     local face_data = faces_to_draw[i]
-    draw_face_with_vertices(face_data.v1, face_data.v2, face_data.v3)
+    draw_vertices_with_circles(face_data.v1, face_data.v2, face_data.v3)
   end
 end
 
--- draw a face using the provided vertices directly
-function draw_face_with_vertices(v1, v2, v3)
-  -- 1. Transform each vertex
+-- Draw circles at the vertices instead of faces
+function draw_vertices_with_circles(v1, v2, v3)
+  -- Transform each vertex
   local t1 = transform_vertex(v1)
   local t2 = transform_vertex(v2)
   local t3 = transform_vertex(v3)
   
-  -- 2. Project each vertex
+  -- Project each vertex
   local p1 = project_vertex(t1)
   local p2 = project_vertex(t2)
   local p3 = project_vertex(t3)
-  
-  -- Check if triangle is on screen
-  local on_screen = 
-    is_point_on_screen(p1) or
-    is_point_on_screen(p2) or
-    is_point_on_screen(p3)
-  
-  if on_screen then
-    -- Calculate face normal for lighting
-    -- vector 1: t2-t1
-    local v1x, v1y, v1z = t2.x-t1.x, t2.y-t1.y, t2.z-t1.z
-    -- vector 2: t3-t1
-    local v2x, v2y, v2z = t3.x-t1.x, t3.y-t1.y, t3.z-t1.z
-    -- cross product to get normal
-    local nx = v1y*v2z - v1z*v2y
-    local ny = v1z*v2x - v1x*v2z
-    local nz = v1x*v2y - v1y*v2x
-    
-    -- Calculate lighting from normal and light direction
-    local light_dot = nx*light_dir.x + ny*light_dir.y + nz*light_dir.z
-    
-    -- Normalize the dot product to 0-1 range
-    light_dot = max(light_dot, 0)
-    
+
+  -- Calculate the average z-depth for scaling
+  local avg_z = (t1.z + t2.z + t3.z) / 3
+
+  -- Calculate the radius based on distance from the camera
+  local radius = circle_radius_divisor / avg_z  -- Use the configurable divisor
+
+  -- Calculate lighting for each vertex
+  local function calculate_lighting(vertex)
+    -- Calculate face normal using cross product
+    local nx, ny, nz = 0, 0, 0
+    if v1 and v2 and v3 then
+      local v1x, v1y, v1z = t2.x - t1.x, t2.y - t1.y, t2.z - t1.z
+      local v2x, v2y, v2z = t3.x - t1.x, t3.y - t1.y, t3.z - t1.z
+      nx = v1y * v2z - v1z * v2y
+      ny = v1z * v2x - v1x * v2z
+      nz = v1x * v2y - v1y * v2x
+    end
+
+    -- Dot product with light direction
+    local light_dot = nx * light_dir.x + ny * light_dir.y + nz * light_dir.z
+    light_dot = max(light_dot, 0)  -- Ensure non-negative
+
     -- Calculate final light level
-    local light_level = ambient_light + light_intensity * light_dot
-    
-    -- Get shaded color
-    local shaded_color = shade_color(model_color, light_level)
-    
-    -- Draw filled
-    if draw_filled then
-      tri(
-        p1.screen_x, p1.screen_y,
-        p2.screen_x, p2.screen_y,
-        p3.screen_x, p3.screen_y,
-        shaded_color
-      )
-    end
-    
-    -- Draw wireframe
-    if wireframe then
-      line(p1.screen_x, p1.screen_y, p2.screen_x, p2.screen_y, 11)
-      line(p2.screen_x, p2.screen_y, p3.screen_x, p3.screen_y, 11)
-      line(p3.screen_x, p3.screen_y, p1.screen_x, p1.screen_y, 11)
-    end
+    return ambient_light + light_intensity * light_dot
   end
+
+  -- Get the color for each vertex based on lighting
+  local color1 = shade_color(model_color, calculate_lighting(t1))
+  local color2 = shade_color(model_color, calculate_lighting(t2))
+  local color3 = shade_color(model_color, calculate_lighting(t3))
+
+  -- Draw circles at the projected positions
+  circfill(p1.screen_x, p1.screen_y, radius, color1)
+  circfill(p2.screen_x, p2.screen_y, radius, color2)
+  circfill(p3.screen_x, p3.screen_y, radius, color3)
 end
 
 -- shade color based on light level

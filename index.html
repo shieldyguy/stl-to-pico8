@@ -317,6 +317,25 @@
             <option value="14">Pink</option>
           </select>
         </label>
+        <label>
+          Circle Size:
+          <input
+            type="number"
+            id="circle-radius-divisor"
+            min="0.5"
+            max="10"
+            step="0.1"
+            value="4.5"
+            style="
+              background-color: #222;
+              color: #eee;
+              border: 1px solid #444;
+              padding: 5px;
+              width: 60px;
+              font-family: 'Courier New', monospace;
+            "
+          />
+        </label>
       </div>
     </section>
 
@@ -369,10 +388,17 @@
           output: [],
         });
 
+        var setCircleRadiusDivisor = Communic8.RPC({
+          id: 8,
+          input: [Communic8.ArgTypes.Number],
+          output: [],
+        });
+
         // Track last sent states to avoid loops
         var lastSentWireframeState = null;
         var lastSentFillState = null;
         var lastSentColorValue = null;
+        var lastSentRadiusDivisorValue = null;
 
         // Define RPC functions for model transfer
         var startModelTransfer = Communic8.RPC({
@@ -432,6 +458,17 @@
           }
         });
 
+        // Add event listener to circle radius divisor input
+        document
+          .getElementById("circle-radius-divisor")
+          .addEventListener("input", function (event) {
+            const radiusDivisor = parseFloat(event.target.value);
+            if (radiusDivisor !== lastSentRadiusDivisorValue) {
+              lastSentRadiusDivisorValue = radiusDivisor;
+              bridge.send(setCircleRadiusDivisor(radiusDivisor));
+            }
+          });
+
         // Send initial defaults once on load
         const initialFillChecked = fillCheckbox.checked;
         const initialWireframeChecked = wireframeCheckbox.checked;
@@ -440,10 +477,14 @@
         lastSentFillState = initialFillChecked;
         lastSentWireframeState = initialWireframeChecked;
         lastSentColorValue = initialColorValue;
+        lastSentRadiusDivisorValue = parseFloat(
+          document.getElementById("circle-radius-divisor").value
+        );
 
         bridge.send(setFill(initialFillChecked));
         bridge.send(setWireframe(initialWireframeChecked));
         bridge.send(setColor(initialColorValue));
+        bridge.send(setCircleRadiusDivisor(lastSentRadiusDivisorValue));
 
         // Poll the wireframe state from PICO-8
         function pollWireframeState() {
