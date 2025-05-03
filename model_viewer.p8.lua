@@ -980,133 +980,144 @@ function project_vertex(vtx_transformed)
   }
 end
 
+-- Add these variables to cache transformed and projected vertices
+local transformed_vertices = {}
+local projected_vertices = {}
+
 -- draw an entire model
 function draw_model(model)
-  -- calculate average z-depth for each face and store in a table
+  -- Precompute transformed and projected vertices for this frame
+  for i=1,#model.vertices do
+    local v = model.vertices[i]
+    local t = transform_vertex(v)
+    transformed_vertices[i] = t
+    projected_vertices[i] = project_vertex(t)
+  end
+
+  -- Calculate faces to draw with culling and depth
   local faces_to_draw = {}
-  
   for i=1,#model.faces do
     local face = model.faces[i]
-    
-    -- get vertices
-    local v1 = model.vertices[face[1]]
-    local v2 = model.vertices[face[2]]
-    local v3 = model.vertices[face[3]]
-    
-    -- transform vertices
-    local t1 = transform_vertex(v1)
-    local t2 = transform_vertex(v2)
-    local t3 = transform_vertex(v3)
-    
-    -- calculate average z-depth
-    local z_depth = (t1.z + t2.z + t3.z) / 3
-    
+    local t1 = transformed_vertices[face[1]]
+    local t2 = transformed_vertices[face[2]]
+    local t3 = transformed_vertices[face[3]]
+
     -- calculate face normal using cross product
-    -- vector 1: t2-t1
     local v1x, v1y, v1z = t2.x-t1.x, t2.y-t1.y, t2.z-t1.z
-    -- vector 2: t3-t1
     local v2x, v2y, v2z = t3.x-t1.x, t3.y-t1.y, t3.z-t1.z
-    -- cross product to get normal
     local nx = v1y*v2z - v1z*v2y
     local ny = v1z*v2x - v1x*v2z
     local nz = v1x*v2y - v1y*v2x
-    
-    -- dot product with view direction (for camera at origin looking along z)
-    -- view direction is from face center to camera
+
+    -- dot product with view direction
     local view_x, view_y, view_z = -((t1.x+t2.x+t3.x)/3), -((t1.y+t2.y+t3.y)/3), -((t1.z+t2.z+t3.z)/3)
     local dot = nx*view_x + ny*view_y + nz*view_z
-    
-    -- only add faces facing camera (dot product > 0)
+
     if dot > 0 then
+      local z_depth = (t1.z + t2.z + t3.z) / 3
       add(faces_to_draw, {
         index = i,
         z = z_depth,
-        v1 = v1,
-        v2 = v2,
-        v3 = v3,
         normal = {x = nx, y = ny, z = nz}
       })
     end
   end
-  
-  -- sort faces by z-depth (back to front)
-  for i=1,#faces_to_draw do
-    for j=1,#faces_to_draw-1 do
-      if faces_to_draw[j].z < faces_to_draw[j+1].z then
-        faces_to_draw[j], faces_to_draw[j+1] = faces_to_draw[j+1], faces_to_draw[j]
-      end
+
+  -- Efficient sort by z-depth (descending)
+  for i=2,#faces_to_draw do
+    local j = i
+    while j > 1 and faces_to_draw[j].z > faces_to_draw[j-1].z do
+      faces_to_draw[j], faces_to_draw[j-1] = faces_to_draw[j-1], faces_to_draw[j]
+      j -= 1
     end
   end
-  
-  -- draw faces in sorted order based on render mode
+
+  -- Draw faces in sorted order
   for i=1,#faces_to_draw do
     local face_data = faces_to_draw[i]
-    
+    local face = model.faces[face_data.index]
+    local t1 = transformed_vertices[face[1]]
+    local t2 = transformed_vertices[face[2]]
+    local t3 = transformed_vertices[face[3]]
+    local p1 = projected_vertices[face[1]]
+    local p2 = projected_vertices[face[2]]
+    local p3 = projected_vertices[face[3]]
     if render_mode == 0 then
-      -- Circles mode
-      draw_vertices_with_circles(face_data.v1, face_data.v2, face_data.v3)
+      draw_vertices_with_circles(face, t1, t2, t3, p1, p2, p3)
     elseif render_mode == 1 then
-      -- Triangles mode
-      draw_tris(face_data.v1, face_data.v2, face_data.v3, face_data.normal)
+      draw_tris(face, t1, t2, t3, p1, p2, p3, face_data.normal)
     elseif render_mode == 2 then
-      -- Squares mode
-      draw_vertices_with_squares(face_data.v1, face_data.v2, face_data.v3)
+      draw_vertices_with_squares(face, t1, t2, t3, p1, p2, p3)
     end
   end
 end
 
--- Draw circles at the vertices instead of faces
-function draw_vertices_with_circles(v1, v2, v3)
-  -- Transform each vertex
-  local t1 = transform_vertex(v1)
-  local t2 = transform_vertex(v2)
-  local t3 = transform_vertex(v3)
-  
-  -- Project each vertex
-  local p1 = project_vertex(t1)
-  local p2 = project_vertex(t2)
-  local p3 = project_vertex(t3)
-
-  -- Calculate the average z-depth for scaling
+-- Update draw_vertices_with_circles to use cached transforms and projections
+function draw_vertices_with_circles(face, t1, t2, t3, p1, p2, p3)
   local avg_z = (t1.z + t2.z + t3.z) / 3
-
-  -- Calculate the radius based on distance from the camera
-  local radius = circle_radius_divisor / avg_z  -- Use the configurable divisor
-
-  -- Calculate lighting for each vertex
-  local function calculate_lighting(vertex)
-    -- Calculate face normal using cross product
-    local nx, ny, nz = 0, 0, 0
-    if v1 and v2 and v3 then
-      local v1x, v1y, v1z = t2.x - t1.x, t2.y - t1.y, t2.z - t1.z
-      local v2x, v2y, v2z = t3.x - t1.x, t3.y - t1.y, t3.z - t1.z
-      nx = v1y * v2z - v1z * v2y
-      ny = v1z * v2x - v1x * v2z
-      nz = v1x * v2y - v1y * v2x
-    end
-
-    -- Dot product with light direction
-    local light_dot = nx * light_dir.x + ny * light_dir.y + nz * light_dir.z
-    light_dot = max(light_dot, 0)  -- Ensure non-negative
-
-    -- Calculate final light level
-    return ambient_light + light_intensity * light_dot
-  end
-
-  -- Get the color for each vertex based on lighting
-  local color1 = shade_color(model_color, calculate_lighting(t1))
-  local color2 = shade_color(model_color, calculate_lighting(t2))
-  local color3 = shade_color(model_color, calculate_lighting(t3))
-
-  -- Draw circles at the projected positions using fill_mode
+  local radius = circle_radius_divisor / avg_z
+  -- Lighting: only compute face normal once
+  local v1x, v1y, v1z = t2.x-t1.x, t2.y-t1.y, t2.z-t1.z
+  local v2x, v2y, v2z = t3.x-t1.x, t3.y-t1.y, t3.z-t1.z
+  local nx = v1y*v2z - v1z*v2y
+  local ny = v1z*v2x - v1x*v2z
+  local nz = v1x*v2y - v1y*v2x
+  local light_dot = nx*light_dir.x + ny*light_dir.y + nz*light_dir.z
+  light_dot = max(light_dot, 0)
+  local light_level = ambient_light + light_intensity * light_dot
+  local color = shade_color(model_color, light_level)
   if fill_mode then
-    circfill(p1.screen_x, p1.screen_y, radius, color1)
-    circfill(p2.screen_x, p2.screen_y, radius, color2)
-    circfill(p3.screen_x, p3.screen_y, radius, color3)
+    circfill(p1.screen_x, p1.screen_y, radius, color)
+    circfill(p2.screen_x, p2.screen_y, radius, color)
+    circfill(p3.screen_x, p3.screen_y, radius, color)
   else
-    circ(p1.screen_x, p1.screen_y, radius, color1)
-    circ(p2.screen_x, p2.screen_y, radius, color2)
-    circ(p3.screen_x, p3.screen_y, radius, color3)
+    circ(p1.screen_x, p1.screen_y, radius, color)
+    circ(p2.screen_x, p2.screen_y, radius, color)
+    circ(p3.screen_x, p3.screen_y, radius, color)
+  end
+end
+
+-- Update draw_tris to use cached transforms and projections
+function draw_tris(face, t1, t2, t3, p1, p2, p3, normal)
+  local on_screen = is_point_on_screen(p1) or is_point_on_screen(p2) or is_point_on_screen(p3)
+  if on_screen then
+    local light_dot = normal.x*light_dir.x + normal.y*light_dir.y + normal.z*light_dir.z
+    light_dot = max(light_dot, 0)
+    local light_level = ambient_light + light_intensity * light_dot
+    local shaded_color = shade_color(model_color, light_level)
+    if draw_filled and fill_mode then
+      tri(p1.screen_x, p1.screen_y, p2.screen_x, p2.screen_y, p3.screen_x, p3.screen_y, shaded_color)
+    end
+    if wireframe or not fill_mode then
+      local wire_color = wireframe and 11 or shaded_color
+      line(p1.screen_x, p1.screen_y, p2.screen_x, p2.screen_y, wire_color)
+      line(p2.screen_x, p2.screen_y, p3.screen_x, p3.screen_y, wire_color)
+      line(p3.screen_x, p3.screen_y, p1.screen_x, p1.screen_y, wire_color)
+    end
+  end
+end
+
+-- Update draw_vertices_with_squares to use cached transforms and projections
+function draw_vertices_with_squares(face, t1, t2, t3, p1, p2, p3)
+  local avg_z = (t1.z + t2.z + t3.z) / 3
+  local size = circle_radius_divisor / avg_z
+  local v1x, v1y, v1z = t2.x-t1.x, t2.y-t1.y, t2.z-t1.z
+  local v2x, v2y, v2z = t3.x-t1.x, t3.y-t1.y, t3.z-t1.z
+  local nx = v1y*v2z - v1z*v2y
+  local ny = v1z*v2x - v1x*v2z
+  local nz = v1x*v2y - v1y*v2x
+  local light_dot = nx*light_dir.x + ny*light_dir.y + nz*light_dir.z
+  light_dot = max(light_dot, 0)
+  local light_level = ambient_light + light_intensity * light_dot
+  local color = shade_color(model_color, light_level)
+  if fill_mode then
+    rectfill(p1.screen_x-size, p1.screen_y-size, p1.screen_x+size, p1.screen_y+size, color)
+    rectfill(p2.screen_x-size, p2.screen_y-size, p2.screen_x+size, p2.screen_y+size, color)
+    rectfill(p3.screen_x-size, p3.screen_y-size, p3.screen_x+size, p3.screen_y+size, color)
+  else
+    rect(p1.screen_x-size, p1.screen_y-size, p1.screen_x+size, p1.screen_y+size, color)
+    rect(p2.screen_x-size, p2.screen_y-size, p2.screen_x+size, p2.screen_y+size, color)
+    rect(p3.screen_x-size, p3.screen_y-size, p3.screen_x+size, p3.screen_y+size, color)
   end
 end
 
@@ -1202,115 +1213,6 @@ function tri(x1, y1, x2, y2, x3, y3, col)
     end
     sx += dx23
     ex += dx13
-  end
-end
-
--- Draw triangles function
-function draw_tris(v1, v2, v3, normal)
-  -- Transform each vertex
-  local t1 = transform_vertex(v1)
-  local t2 = transform_vertex(v2)
-  local t3 = transform_vertex(v3)
-  
-  -- Project each vertex
-  local p1 = project_vertex(t1)
-  local p2 = project_vertex(t2)
-  local p3 = project_vertex(t3)
-  
-  -- Check if triangle is on screen
-  local on_screen = 
-    is_point_on_screen(p1) or
-    is_point_on_screen(p2) or
-    is_point_on_screen(p3)
-  
-  if on_screen then
-    -- Calculate lighting from normal and light direction
-    local light_dot = normal.x*light_dir.x + normal.y*light_dir.y + normal.z*light_dir.z
-    
-    -- Normalize the dot product to 0-1 range
-    light_dot = max(light_dot, 0)
-    
-    -- Calculate final light level
-    local light_level = ambient_light + light_intensity * light_dot
-    
-    -- Get shaded color
-    local shaded_color = shade_color(model_color, light_level)
-    
-    -- Draw filled triangles if fill_mode is enabled
-    if draw_filled and fill_mode then
-      tri(
-        p1.screen_x, p1.screen_y,
-        p2.screen_x, p2.screen_y,
-        p3.screen_x, p3.screen_y,
-        shaded_color
-      )
-    end
-    
-    -- Draw wireframe
-    if wireframe or not fill_mode then
-      -- Use a fixed color for wireframe (could be configurable later)
-      local wire_color = wireframe and 11 or shaded_color
-      line(p1.screen_x, p1.screen_y, p2.screen_x, p2.screen_y, wire_color)
-      line(p2.screen_x, p2.screen_y, p3.screen_x, p3.screen_y, wire_color)
-      line(p3.screen_x, p3.screen_y, p1.screen_x, p1.screen_y, wire_color)
-    end
-  end
-end
-
--- Draw squares at the vertices
-function draw_vertices_with_squares(v1, v2, v3)
-  -- Transform each vertex
-  local t1 = transform_vertex(v1)
-  local t2 = transform_vertex(v2)
-  local t3 = transform_vertex(v3)
-  
-  -- Project each vertex
-  local p1 = project_vertex(t1)
-  local p2 = project_vertex(t2)
-  local p3 = project_vertex(t3)
-
-  -- Calculate the average z-depth for scaling
-  local avg_z = (t1.z + t2.z + t3.z) / 3
-
-  -- Calculate the size based on distance from the camera
-  local size = circle_radius_divisor / avg_z  -- Use the same divisor as circles
-
-  -- Calculate lighting for each vertex
-  local function calculate_lighting(vertex)
-    -- Calculate face normal using cross product
-    local nx, ny, nz = 0, 0, 0
-    if v1 and v2 and v3 then
-      local v1x, v1y, v1z = t2.x - t1.x, t2.y - t1.y, t2.z - t1.z
-      local v2x, v2y, v2z = t3.x - t1.x, t3.y - t1.y, t3.z - t1.z
-      nx = v1y * v2z - v1z * v2y
-      ny = v1z * v2x - v1x * v2z
-      nz = v1x * v2y - v1y * v2x
-    end
-
-    -- Dot product with light direction
-    local light_dot = nx * light_dir.x + ny * light_dir.y + nz * light_dir.z
-    light_dot = max(light_dot, 0)  -- Ensure non-negative
-
-    -- Calculate final light level
-    return ambient_light + light_intensity * light_dot
-  end
-
-  -- Get the color for each vertex based on lighting
-  local color1 = shade_color(model_color, calculate_lighting(t1))
-  local color2 = shade_color(model_color, calculate_lighting(t2))
-  local color3 = shade_color(model_color, calculate_lighting(t3))
-
-  -- Draw squares at the projected positions
-  if fill_mode then
-    -- Filled squares
-    rectfill(p1.screen_x-size, p1.screen_y-size, p1.screen_x+size, p1.screen_y+size, color1)
-    rectfill(p2.screen_x-size, p2.screen_y-size, p2.screen_x+size, p2.screen_y+size, color2)
-    rectfill(p3.screen_x-size, p3.screen_y-size, p3.screen_x+size, p3.screen_y+size, color3)
-  else
-    -- Square outlines
-    rect(p1.screen_x-size, p1.screen_y-size, p1.screen_x+size, p1.screen_y+size, color1)
-    rect(p2.screen_x-size, p2.screen_y-size, p2.screen_x+size, p2.screen_y+size, color2)
-    rect(p3.screen_x-size, p3.screen_y-size, p3.screen_x+size, p3.screen_y+size, color3)
   end
 end
 
