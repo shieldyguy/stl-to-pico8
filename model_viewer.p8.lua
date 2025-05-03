@@ -42,6 +42,8 @@ local draw_filled = true
 local wireframe = false
 local model_color = 3 -- green
 local circle_radius_divisor = 4.5 -- default circle radius divisor
+local render_mode = 0 -- 0=circles, 1=triangles, 2=squares
+local fill_mode = true -- true=filled, false=outline
 
 -- lighting configuration
 local light_dir = {x=-0.2, y=-0.9, z=-0.2}
@@ -337,6 +339,26 @@ functions[8] = {
   output={},
   execute=function(args)
     circle_radius_divisor = args[1] -- Update the global circle_radius_divisor variable
+    -- No return value needed
+  end
+}
+
+-- RPC for setting render mode (ID 9)
+functions[9] = {
+  input={arg_types.byte},
+  output={},
+  execute=function(args)
+    render_mode = args[1] -- Update the global render_mode variable (0=circles, 1=triangles, 2=squares)
+    -- No return value needed
+  end
+}
+
+-- RPC for setting fill mode (ID 10)
+functions[10] = {
+  input={arg_types.boolean},
+  output={},
+  execute=function(args)
+    fill_mode = args[1] -- Update the global fill_mode variable (true=filled, false=outline)
     -- No return value needed
   end
 }
@@ -1001,7 +1023,8 @@ function draw_model(model)
         z = z_depth,
         v1 = v1,
         v2 = v2,
-        v3 = v3
+        v3 = v3,
+        normal = {x = nx, y = ny, z = nz}
       })
     end
   end
@@ -1015,10 +1038,20 @@ function draw_model(model)
     end
   end
   
-  -- draw faces in sorted order
+  -- draw faces in sorted order based on render mode
   for i=1,#faces_to_draw do
     local face_data = faces_to_draw[i]
-    draw_vertices_with_circles(face_data.v1, face_data.v2, face_data.v3)
+    
+    if render_mode == 0 then
+      -- Circles mode
+      draw_vertices_with_circles(face_data.v1, face_data.v2, face_data.v3)
+    elseif render_mode == 1 then
+      -- Triangles mode
+      draw_tris(face_data.v1, face_data.v2, face_data.v3, face_data.normal)
+    elseif render_mode == 2 then
+      -- Squares mode
+      draw_vertices_with_squares(face_data.v1, face_data.v2, face_data.v3)
+    end
   end
 end
 
@@ -1065,10 +1098,16 @@ function draw_vertices_with_circles(v1, v2, v3)
   local color2 = shade_color(model_color, calculate_lighting(t2))
   local color3 = shade_color(model_color, calculate_lighting(t3))
 
-  -- Draw circles at the projected positions
-  circfill(p1.screen_x, p1.screen_y, radius, color1)
-  circfill(p2.screen_x, p2.screen_y, radius, color2)
-  circfill(p3.screen_x, p3.screen_y, radius, color3)
+  -- Draw circles at the projected positions using fill_mode
+  if fill_mode then
+    circfill(p1.screen_x, p1.screen_y, radius, color1)
+    circfill(p2.screen_x, p2.screen_y, radius, color2)
+    circfill(p3.screen_x, p3.screen_y, radius, color3)
+  else
+    circ(p1.screen_x, p1.screen_y, radius, color1)
+    circ(p2.screen_x, p2.screen_y, radius, color2)
+    circ(p3.screen_x, p3.screen_y, radius, color3)
+  end
 end
 
 -- shade color based on light level
@@ -1163,6 +1202,115 @@ function tri(x1, y1, x2, y2, x3, y3, col)
     end
     sx += dx23
     ex += dx13
+  end
+end
+
+-- Draw triangles function
+function draw_tris(v1, v2, v3, normal)
+  -- Transform each vertex
+  local t1 = transform_vertex(v1)
+  local t2 = transform_vertex(v2)
+  local t3 = transform_vertex(v3)
+  
+  -- Project each vertex
+  local p1 = project_vertex(t1)
+  local p2 = project_vertex(t2)
+  local p3 = project_vertex(t3)
+  
+  -- Check if triangle is on screen
+  local on_screen = 
+    is_point_on_screen(p1) or
+    is_point_on_screen(p2) or
+    is_point_on_screen(p3)
+  
+  if on_screen then
+    -- Calculate lighting from normal and light direction
+    local light_dot = normal.x*light_dir.x + normal.y*light_dir.y + normal.z*light_dir.z
+    
+    -- Normalize the dot product to 0-1 range
+    light_dot = max(light_dot, 0)
+    
+    -- Calculate final light level
+    local light_level = ambient_light + light_intensity * light_dot
+    
+    -- Get shaded color
+    local shaded_color = shade_color(model_color, light_level)
+    
+    -- Draw filled triangles if fill_mode is enabled
+    if draw_filled and fill_mode then
+      tri(
+        p1.screen_x, p1.screen_y,
+        p2.screen_x, p2.screen_y,
+        p3.screen_x, p3.screen_y,
+        shaded_color
+      )
+    end
+    
+    -- Draw wireframe
+    if wireframe or not fill_mode then
+      -- Use a fixed color for wireframe (could be configurable later)
+      local wire_color = wireframe and 11 or shaded_color
+      line(p1.screen_x, p1.screen_y, p2.screen_x, p2.screen_y, wire_color)
+      line(p2.screen_x, p2.screen_y, p3.screen_x, p3.screen_y, wire_color)
+      line(p3.screen_x, p3.screen_y, p1.screen_x, p1.screen_y, wire_color)
+    end
+  end
+end
+
+-- Draw squares at the vertices
+function draw_vertices_with_squares(v1, v2, v3)
+  -- Transform each vertex
+  local t1 = transform_vertex(v1)
+  local t2 = transform_vertex(v2)
+  local t3 = transform_vertex(v3)
+  
+  -- Project each vertex
+  local p1 = project_vertex(t1)
+  local p2 = project_vertex(t2)
+  local p3 = project_vertex(t3)
+
+  -- Calculate the average z-depth for scaling
+  local avg_z = (t1.z + t2.z + t3.z) / 3
+
+  -- Calculate the size based on distance from the camera
+  local size = circle_radius_divisor / avg_z  -- Use the same divisor as circles
+
+  -- Calculate lighting for each vertex
+  local function calculate_lighting(vertex)
+    -- Calculate face normal using cross product
+    local nx, ny, nz = 0, 0, 0
+    if v1 and v2 and v3 then
+      local v1x, v1y, v1z = t2.x - t1.x, t2.y - t1.y, t2.z - t1.z
+      local v2x, v2y, v2z = t3.x - t1.x, t3.y - t1.y, t3.z - t1.z
+      nx = v1y * v2z - v1z * v2y
+      ny = v1z * v2x - v1x * v2z
+      nz = v1x * v2y - v1y * v2x
+    end
+
+    -- Dot product with light direction
+    local light_dot = nx * light_dir.x + ny * light_dir.y + nz * light_dir.z
+    light_dot = max(light_dot, 0)  -- Ensure non-negative
+
+    -- Calculate final light level
+    return ambient_light + light_intensity * light_dot
+  end
+
+  -- Get the color for each vertex based on lighting
+  local color1 = shade_color(model_color, calculate_lighting(t1))
+  local color2 = shade_color(model_color, calculate_lighting(t2))
+  local color3 = shade_color(model_color, calculate_lighting(t3))
+
+  -- Draw squares at the projected positions
+  if fill_mode then
+    -- Filled squares
+    rectfill(p1.screen_x-size, p1.screen_y-size, p1.screen_x+size, p1.screen_y+size, color1)
+    rectfill(p2.screen_x-size, p2.screen_y-size, p2.screen_x+size, p2.screen_y+size, color2)
+    rectfill(p3.screen_x-size, p3.screen_y-size, p3.screen_x+size, p3.screen_y+size, color3)
+  else
+    -- Square outlines
+    rect(p1.screen_x-size, p1.screen_y-size, p1.screen_x+size, p1.screen_y+size, color1)
+    rect(p2.screen_x-size, p2.screen_y-size, p2.screen_x+size, p2.screen_y+size, color2)
+    rect(p3.screen_x-size, p3.screen_y-size, p3.screen_x+size, p3.screen_y+size, color3)
   end
 end
 

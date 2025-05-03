@@ -336,6 +336,29 @@
             "
           />
         </label>
+        <div style="margin-top: 10px">
+          <label>
+            Render Mode:
+            <select
+              id="render-mode"
+              style="
+                background-color: #222;
+                color: #eee;
+                border: 1px solid #444;
+                padding: 5px;
+                font-family: 'Courier New', monospace;
+              "
+            >
+              <option value="0" selected>Circles</option>
+              <option value="1">Triangles</option>
+              <option value="2">Squares</option>
+            </select>
+          </label>
+          <label style="margin-left: 10px">
+            <input type="checkbox" id="toggle-fill-mode" checked /> Filled
+            Shapes
+          </label>
+        </div>
       </div>
     </section>
 
@@ -394,11 +417,25 @@
           output: [],
         });
 
+        var setRenderMode = Communic8.RPC({
+          id: 9,
+          input: [Communic8.ArgTypes.Byte],
+          output: [],
+        });
+
+        var setFillMode = Communic8.RPC({
+          id: 10,
+          input: [Communic8.ArgTypes.Boolean],
+          output: [],
+        });
+
         // Track last sent states to avoid loops
         var lastSentWireframeState = null;
         var lastSentFillState = null;
         var lastSentColorValue = null;
         var lastSentRadiusDivisorValue = null;
+        var lastSentRenderModeValue = null;
+        var lastSentFillModeValue = null;
 
         // Define RPC functions for model transfer
         var startModelTransfer = Communic8.RPC({
@@ -469,22 +506,55 @@
             }
           });
 
+        // Add event listener to render mode selector
+        document
+          .getElementById("render-mode")
+          .addEventListener("change", function (event) {
+            const renderMode = parseInt(event.target.value, 10);
+            if (renderMode !== lastSentRenderModeValue) {
+              lastSentRenderModeValue = renderMode;
+              bridge.send(setRenderMode(renderMode));
+            }
+          });
+
+        // Add event listener to fill mode checkbox
+        document
+          .getElementById("toggle-fill-mode")
+          .addEventListener("change", function (event) {
+            const fillMode = event.target.checked;
+            if (fillMode !== lastSentFillModeValue) {
+              lastSentFillModeValue = fillMode;
+              bridge.send(setFillMode(fillMode));
+            }
+          });
+
         // Send initial defaults once on load
         const initialFillChecked = fillCheckbox.checked;
         const initialWireframeChecked = wireframeCheckbox.checked;
         const initialColorValue = parseInt(colorSelect.value, 10);
+        const initialRadiusDivisor = parseFloat(
+          document.getElementById("circle-radius-divisor").value
+        );
+        const initialRenderMode = parseInt(
+          document.getElementById("render-mode").value,
+          10
+        );
+        const initialFillMode =
+          document.getElementById("toggle-fill-mode").checked;
 
         lastSentFillState = initialFillChecked;
         lastSentWireframeState = initialWireframeChecked;
         lastSentColorValue = initialColorValue;
-        lastSentRadiusDivisorValue = parseFloat(
-          document.getElementById("circle-radius-divisor").value
-        );
+        lastSentRadiusDivisorValue = initialRadiusDivisor;
+        lastSentRenderModeValue = initialRenderMode;
+        lastSentFillModeValue = initialFillMode;
 
         bridge.send(setFill(initialFillChecked));
         bridge.send(setWireframe(initialWireframeChecked));
         bridge.send(setColor(initialColorValue));
-        bridge.send(setCircleRadiusDivisor(lastSentRadiusDivisorValue));
+        bridge.send(setCircleRadiusDivisor(initialRadiusDivisor));
+        bridge.send(setRenderMode(initialRenderMode));
+        bridge.send(setFillMode(initialFillMode));
 
         // Poll the wireframe state from PICO-8
         function pollWireframeState() {
@@ -713,24 +783,9 @@
                   `❗ Too many faces for PICO-8 (max ${PICO_FACE_LIMIT})`
                 );
               }
-              if (warningMessages.length > 0) {
-                warnings.textContent += "\n" + warningMessages.join("\n");
-              }
-
-              // Enable the send button now that we have a processed model
-              document.getElementById("send-to-pico8-button").disabled = false;
-              window.decimatedModel = null; // Clear any previous decimated model
-
-              // Add: Send the deduped model to PICO-8
-              // if (window.dedupedModel) {
-              //  sendModelToPico8(window.dedupedModel);
-              // }
-            } else {
-              warnings.textContent +=
-                "\nCurrently only ASCII STL parsing is supported.";
+              warnings.textContent = warningMessages.join("\n");
             }
           };
-
           reader.readAsText(file);
         });
 
