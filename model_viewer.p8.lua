@@ -35,6 +35,11 @@ function center_model()
     v.y = (v.y - center_y) * scale
     v.z = ((v.z - center_z) * scale)
   end
+  
+  -- Clear cached transformation arrays to force reallocation at next frame
+  transformed_vertices = {}
+  projected_vertices = {}
+  faces_to_draw = {}
 end
 
 -- configuration
@@ -294,6 +299,11 @@ local expected_vertices = 0
 local expected_faces = 0
 local is_receiving = false
 
+-- Pre-allocated tables for vertex transformations
+local transformed_vertices = {}
+local projected_vertices = {}
+local faces_to_draw = {}
+
 -- RPC for setting wireframe state (ID 0)
 functions[0] = {
   input={arg_types.boolean},
@@ -440,6 +450,12 @@ functions[7] = {
       -- Replace current model
       current_model.vertices = received_vertices
       current_model.faces = received_faces
+      
+      -- Clear cached transformation arrays to force reallocation at next frame
+      transformed_vertices = {}
+      projected_vertices = {}
+      faces_to_draw = {}
+      
       center_model() -- Recenter and scale the new model
       print("model updated successfully!", 0, 117, 8)
     else
@@ -829,6 +845,7 @@ end
 function _init()
   cls(0)
   print("debug test", 2, 2, 7)
+  frame_count = 0
   
   -- Normalize light direction at start
   local len = sqrt(light_dir.x^2 + light_dir.y^2 + light_dir.z^2)
@@ -837,6 +854,10 @@ function _init()
     light_dir.y /= len
     light_dir.z /= len
   end
+  
+  -- Initialize model by calling center_model
+  update_rotation()
+  center_model()
 
   -- Initialize communic8
   update_communic8 = init_communic8(functions)
@@ -931,8 +952,8 @@ function _draw()
   end
 end
 
--- transform a single vertex
-function transform_vertex(vtx)
+-- transform a single vertex (modified to update an existing result table)
+function transform_vertex(vtx, result)
   -- step 1: apply rotation around x axis
   local y0 = vtx.y * cos_rot_x - vtx.z * sin_rot_x
   local z0 = vtx.y * sin_rot_x + vtx.z * cos_rot_x
@@ -949,15 +970,13 @@ function transform_vertex(vtx)
   local z2 = z1 + model.z
   
   -- step 4: convert to camera space
-  local x3 = x2 - camera.x
-  local y3 = y2 - camera.y
-  local z3 = z2 - camera.z
-  
-  return {x = x3, y = y3, z = z3}
+  result.x = x2 - camera.x
+  result.y = y2 - camera.y
+  result.z = z2 - camera.z
 end
 
--- project transformed vertex to screen
-function project_vertex(vtx_transformed)
+-- project transformed vertex to screen (modified to update an existing result table)
+function project_vertex(vtx_transformed, result)
   -- explicit named variables for clarity
   local x = vtx_transformed.x
   local y = vtx_transformed.y 
@@ -970,32 +989,38 @@ function project_vertex(vtx_transformed)
   
   -- increased projection scale to 60 for better visibility
   local scale = 60
-  local screen_x = 64 + (x / z) * scale
-  local screen_y = 64 + (y / z) * scale
-  
-  return {
-    screen_x = screen_x,
-    screen_y = screen_y,
-    z = z
-  }
+  result.screen_x = 64 + (x / z) * scale
+  result.screen_y = 64 + (y / z) * scale
+  result.z = z
 end
-
--- Add these variables to cache transformed and projected vertices
-local transformed_vertices = {}
-local projected_vertices = {}
 
 -- draw an entire model
 function draw_model(model)
-  -- Precompute transformed and projected vertices for this frame
+  -- Initialize or resize transformation arrays if needed
+  for i=1,#model.vertices do
+    if not transformed_vertices[i] then
+      transformed_vertices[i] = {x=0, y=0, z=0}
+    end
+    if not projected_vertices[i] then
+      projected_vertices[i] = {screen_x=0, screen_y=0, z=0}
+    end
+  end
+  
+  -- Precompute transformed and projected vertices for this frame (reusing tables)
   for i=1,#model.vertices do
     local v = model.vertices[i]
-    local t = transform_vertex(v)
-    transformed_vertices[i] = t
-    projected_vertices[i] = project_vertex(t)
+    transform_vertex(v, transformed_vertices[i])
+    project_vertex(transformed_vertices[i], projected_vertices[i])
   end
 
+  -- Reset faces_to_draw length
+  for i=#faces_to_draw,1,-1 do
+    faces_to_draw[i] = nil
+  end
+  
+  local face_count = 0
+  
   -- Calculate faces to draw with culling and depth
-  local faces_to_draw = {}
   for i=1,#model.faces do
     local face = model.faces[i]
     local t1 = transformed_vertices[face[1]]
@@ -1015,16 +1040,32 @@ function draw_model(model)
 
     if dot > 0 then
       local z_depth = (t1.z + t2.z + t3.z) / 3
-      add(faces_to_draw, {
-        index = i,
-        z = z_depth,
-        normal = {x = nx, y = ny, z = nz}
-      })
+      face_count = face_count + 1
+      
+      -- Create or reuse face data
+      if not faces_to_draw[face_count] then
+        faces_to_draw[face_count] = {
+          index = i,
+          z = z_depth,
+          normal = {x = nx, y = ny, z = nz}
+        }
+      else
+        local face_data = faces_to_draw[face_count]
+        face_data.index = i
+        face_data.z = z_depth
+        if not face_data.normal then
+          face_data.normal = {x = nx, y = ny, z = nz}
+        else
+          face_data.normal.x = nx
+          face_data.normal.y = ny
+          face_data.normal.z = nz
+        end
+      end
     end
   end
 
   -- Efficient sort by z-depth (descending)
-  for i=2,#faces_to_draw do
+  for i=2,face_count do
     local j = i
     while j > 1 and faces_to_draw[j].z > faces_to_draw[j-1].z do
       faces_to_draw[j], faces_to_draw[j-1] = faces_to_draw[j-1], faces_to_draw[j]
@@ -1033,7 +1074,7 @@ function draw_model(model)
   end
 
   -- Draw faces in sorted order
-  for i=1,#faces_to_draw do
+  for i=1,face_count do
     local face_data = faces_to_draw[i]
     local face = model.faces[face_data.index]
     local t1 = transformed_vertices[face[1]]
